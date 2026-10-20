@@ -1,0 +1,67 @@
+services:
+  # 1. Banco Relacional (Transacional / ACID)
+  postgres:
+    image: postgres:16-alpine
+    container_name: b2b-postgres
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin_password
+      POSTGRES_DB: b2b_orders_db
+    ports:
+      - "5435:5432"
+    networks:
+      - b2b-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d b2b_orders_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. Banco NoSQL (Dead Letter Queue - Resiliência)
+  mongodb:
+    image: mongo:7.0
+    container_name: b2b-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin_password
+    ports:
+      - "27017:27017"
+    networks:
+      - b2b-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 3. Mensageria (Kafka em modo KRaft - Sem Zookeeper)
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: b2b-kafka
+    environment:
+      # Configurações KRaft
+      KAFKA_CFG_NODE_ID: 1
+      KAFKA_CFG_PROCESS_ROLES: broker,controller
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      # Configurações de Rede (Interna e Externa para o seu Java acessar local)
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      # Simulação de ambiente dev
+      KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    ports:
+      - "9094:9094" # A sua API Spring Boot acessará por esta porta localmente
+    networks:
+      - b2b-network
+    healthcheck:
+      test: ["CMD", "kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  b2b-network:
+    driver: bridge

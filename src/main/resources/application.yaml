@@ -1,0 +1,40 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: order-management
+
+  # 1. Configuração do PostgreSQL (Transacional)
+  datasource:
+    url: jdbc:postgresql://localhost:5435/b2b_orders_db
+    username: admin
+    password: admin_password
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update # O Hibernate criará as tabelas automaticamente com base nas nossas classes
+    show-sql: true # Mostra as queries no console para facilitar o debug
+    properties:
+      hibernate:
+        format_sql: true
+
+  # 2. Configuração do MongoDB (Resiliência / DLQ)
+  mongodb:
+    uri: mongodb://admin:admin_password@localhost:27017/b2b_orders_db?authSource=admin
+    representation:
+      uuid: standard
+  # 3. Configuração do Apache Kafka
+  kafka:
+    bootstrap-servers: localhost:9094
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      group-id: b2b-order-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
