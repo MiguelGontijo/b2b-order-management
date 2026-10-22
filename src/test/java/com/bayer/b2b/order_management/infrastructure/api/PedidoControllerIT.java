@@ -90,7 +90,7 @@ class PedidoControllerIT {
             };
 
             // Subimos o status para APROVADO para simular a saída real do UseCase
-            pedidoSimulado.transitarStatus(com.bayer.b2b.order_management.domain.model.StatusPedido.APROVADO);
+            pedidoSimulado.aprovar();
 
             when(processarPedidoUseCase.execute(any(ProcessarPedidoCommand.class))).thenReturn(pedidoSimulado);
 

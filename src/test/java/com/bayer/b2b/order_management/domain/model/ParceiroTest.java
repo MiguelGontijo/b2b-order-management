@@ -261,4 +261,67 @@ class ParceiroTest {
             assertTrue(resultado.contains("limiteCredito=1000.00"));
         }
     }
+
+    @Nested
+    @DisplayName("4. Regra de Negócio: Estorno de Crédito")
+    class EstornarCreditoTests {
+
+        private Parceiro parceiro;
+
+        @org.junit.jupiter.api.BeforeEach
+        void setUp() {
+            parceiro = new Parceiro("Bayer", "12345678901234", new BigDecimal("5000.00"));
+        }
+
+        @Test
+        @DisplayName("Deve devolver o valor ao limite do parceiro com precisão matemática")
+        void deveEstornarValorComSucesso() {
+            // Arrange
+            BigDecimal valorEstorno = new BigDecimal("1500.00");
+            BigDecimal limiteEsperado = new BigDecimal("6500.00");
+
+            // Act
+            parceiro.estornarCredito(valorEstorno);
+
+            // Assert
+            assertEquals(0, limiteEsperado.compareTo(parceiro.getLimiteCredito()),
+                    "O limite de crédito deve ser a soma exata do saldo anterior com o valor estornado");
+        }
+
+        @Test
+        @DisplayName("Deve lançar NullPointerException quando tentar estornar valor nulo")
+        void deveFalharQuandoEstornoForNulo() {
+            // Act & Assert
+            NullPointerException exception = assertThrows(NullPointerException.class, () ->
+                    parceiro.estornarCredito(null)
+            );
+            assertEquals("O valor de estorno não pode ser nulo", exception.getMessage());
+        }
+
+        @Test
+        @DisplayName("Deve lançar IllegalArgumentException quando tentar estornar valor zero")
+        void deveFalharQuandoEstornoForZero() {
+            // Act & Assert
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                    parceiro.estornarCredito(BigDecimal.ZERO)
+            );
+            assertEquals("O valor de estorno deve ser maior que zero", exception.getMessage());
+        }
+
+        @Test
+        @DisplayName("Deve lançar IllegalArgumentException e proteger o estado interno quando tentar estornar valor negativo")
+        void deveFalharQuandoEstornoForNegativo() {
+            // Arrange
+            BigDecimal valorNegativo = new BigDecimal("-100.00");
+
+            // Act & Assert
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                    parceiro.estornarCredito(valorNegativo)
+            );
+            assertEquals("O valor de estorno deve ser maior que zero", exception.getMessage());
+
+            // Assert Estado Intacto (Garantia de que o limite original não foi adulterado pela tentativa falha)
+            assertEquals(0, new BigDecimal("5000.00").compareTo(parceiro.getLimiteCredito()));
+        }
+    }
 }

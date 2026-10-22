@@ -78,23 +78,30 @@ class PedidoTest {
     class TransitarStatusTests {
 
         @Test
-        @DisplayName("Deve avançar o status com sucesso se a Máquina de Estados permitir")
+        @DisplayName("Deve avançar o status com sucesso utilizando os métodos explícitos de intenção")
         void deveTransitarStatusQuandoValido() {
-            // Act: Pendente -> Aprovado
-            pedido.transitarStatus(StatusPedido.APROVADO);
-
-            // Assert
+            // Act & Assert: Fluxo Logístico Feliz
+            pedido.aprovar();
             assertEquals(StatusPedido.APROVADO, pedido.getStatus());
+
+            pedido.processar();
+            assertEquals(StatusPedido.EM_PROCESSAMENTO, pedido.getStatus());
+
+            pedido.enviar();
+            assertEquals(StatusPedido.ENVIADO, pedido.getStatus());
+
+            pedido.entregar();
+            assertEquals(StatusPedido.ENTREGUE, pedido.getStatus());
         }
 
         @Test
-        @DisplayName("Deve barrar e proteger o estado atual se a transição for ilegal")
+        @DisplayName("Deve barrar e proteger o estado atual se a intenção acionar uma transição ilegal")
         void deveFalharQuandoTransicaoForInvalida() {
             // Arrange (Pedido já nasce PENDENTE)
 
-            // Act & Assert (Pendente -> Entregue é proibido)
+            // Act & Assert (Pendente -> Entregue é proibido. O método entregar() força transição para ENTREGUE)
             IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
-                    pedido.transitarStatus(StatusPedido.ENTREGUE)
+                    pedido.entregar()
             );
 
             assertEquals("Violação da Máquina de Estados: O pedido não pode transitar de PENDENTE para ENTREGUE", exception.getMessage());
@@ -104,12 +111,19 @@ class PedidoTest {
         }
 
         @Test
-        @DisplayName("Deve lançar NullPointerException ao tentar transitar para um status nulo")
-        void deveFalharQuandoNovoStatusForNulo() {
-            NullPointerException exception = assertThrows(NullPointerException.class, () ->
-                    pedido.transitarStatus(null)
+        @DisplayName("Deve permitir o cancelamento do pedido e bloquear mutações posteriores")
+        void devePermitirCancelamentoEBloquearNovasAcoes() {
+            // Act: PENDENTE -> CANCELADO
+            pedido.cancelar();
+
+            // Assert
+            assertEquals(StatusPedido.CANCELADO, pedido.getStatus());
+
+            // Act & Assert: Um pedido morto não pode ser ressuscitado
+            IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+                    pedido.aprovar()
             );
-            assertEquals("O novo status não pode ser nulo", exception.getMessage());
+            assertEquals("Violação da Máquina de Estados: O pedido não pode transitar de CANCELADO para APROVADO", exception.getMessage());
         }
     }
 

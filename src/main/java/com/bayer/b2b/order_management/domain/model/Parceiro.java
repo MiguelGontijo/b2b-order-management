@@ -90,6 +90,28 @@ public class Parceiro {
         this.limiteCredito = this.limiteCredito.subtract(valor);
     }
 
+    /**
+     * Executa o estorno de um valor ao limite de crédito do parceiro.
+     * <p>
+     * Utilizado exclusivamente em fluxos de cancelamento (logística reversa ou desistência)
+     * de pedidos que já haviam deduzido saldo financeiro no passado. Assim como o débito,
+     * este método exige execução sob bloqueio pessimista (Pessimistic Lock) gerenciado
+     * pelo orquestrador para garantir a integridade ACID da conta do cliente.
+     * </p>
+     *
+     * @param valor O montante financeiro a ser devolvido ao limite do parceiro.
+     * @throws IllegalArgumentException Se o valor de estorno for inválido (zero ou negativo).
+     */
+    public void estornarCredito(BigDecimal valor) {
+        Objects.requireNonNull(valor, "O valor de estorno não pode ser nulo");
+
+        if (valor.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("O valor de estorno deve ser maior que zero");
+        }
+
+        this.limiteCredito = this.limiteCredito.add(valor);
+    }
+
     // =========================================================================================
     // Getters puros (Apenas leitura)
     // NENHUM Setter foi criado. O estado do banco só muda através do construtor ou de métodos de negócio.

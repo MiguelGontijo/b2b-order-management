@@ -101,12 +101,17 @@ public class Pedido {
     // =========================================================================================
 
     /**
-     * Tenta avançar ou retroceder o status do pedido utilizando a máquina de estados.
+     * Valida internamente se o pedido pode assumir um novo status utilizando a máquina de estados.
+     * <p>
+     * Decisão Arquitetural: A visibilidade privada protege a Raiz de Agregação contra mutações anêmicas.
+     * O sistema deve utilizar exclusivamente os métodos explícitos de intenção (ex: aprovar(), cancelar())
+     * para interagir com o ciclo de vida logístico e financeiro do pedido.
+     * </p>
      *
      * @param novoStatus O status desejado.
      * @throws IllegalStateException se a regra de transição for violada.
      */
-    public void transitarStatus(StatusPedido novoStatus) {
+    private void transitarStatus(StatusPedido novoStatus) {
         Objects.requireNonNull(novoStatus, "O novo status não pode ser nulo");
 
         if (!this.status.podeTransitarPara(novoStatus)) {
@@ -117,6 +122,41 @@ public class Pedido {
         }
 
         this.status = novoStatus;
+    }
+
+    /**
+     * Registra a aprovação financeira do pedido, liberando-o para a esteira logística.
+     */
+    public void aprovar() {
+        this.transitarStatus(StatusPedido.APROVADO);
+    }
+
+    /**
+     * Indica que o pedido entrou na fase de separação e embalagem no centro de distribuição.
+     */
+    public void processar() {
+        this.transitarStatus(StatusPedido.EM_PROCESSAMENTO);
+    }
+
+    /**
+     * Registra o despacho do pedido para a transportadora.
+     */
+    public void enviar() {
+        this.transitarStatus(StatusPedido.ENVIADO);
+    }
+
+    /**
+     * Confirma a entrega física ao parceiro B2B, finalizando o ciclo de sucesso.
+     */
+    public void entregar() {
+        this.transitarStatus(StatusPedido.ENTREGUE);
+    }
+
+    /**
+     * Marca o pedido como cancelado, bloqueando mutações operacionais futuras.
+     */
+    public void cancelar() {
+        this.transitarStatus(StatusPedido.CANCELADO);
     }
 
     /**

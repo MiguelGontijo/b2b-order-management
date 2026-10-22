@@ -111,7 +111,7 @@ class ProcessarPedidoUseCaseTest {
     class OrquestracaoSucessoTests {
 
         @Test
-        @DisplayName("Deve processar o pedido, deduzir saldo, transitar status, salvar e publicar o evento")
+        @DisplayName("Deve processar a recepção do pedido, salvar como PENDENTE e publicar o evento sem reter saldo")
         void deveProcessarPedidoComSucesso() {
             // Arrange - Criamos os DTOs do cliente
             Set<ItemCommand> itensCommand = Set.of(
@@ -120,9 +120,10 @@ class ProcessarPedidoUseCaseTest {
             ); // Total do Pedido = 250.00
             ProcessarPedidoCommand command = new ProcessarPedidoCommand(99L, itensCommand);
 
-            // Arrange - Simulamos a existência do Parceiro no banco com limite suficiente (1000.00)
+            // Arrange - Simulamos a existência do Parceiro no banco com limite inicial (1000.00)
             Parceiro parceiroRealDoDominio = new Parceiro("Bayer Agro", "11111111111111", new BigDecimal("1000.00"));
-            when(parceiroRepository.findByIdWithPessimisticLock(99L)).thenReturn(Optional.of(parceiroRealDoDominio));
+            // Alteração Arquitetural: O bloqueio pessimista foi removido da fase de criação
+            when(parceiroRepository.findById(99L)).thenReturn(Optional.of(parceiroRealDoDominio));
 
             // Arrange - Simulamos o repositório de persistência apenas devolvendo o objeto que ele recebeu
             when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -132,14 +133,14 @@ class ProcessarPedidoUseCaseTest {
 
             // Assert - Validações de Retorno
             assertNotNull(pedidoFinal, "O caso de uso deve retornar a Raiz de Agregação");
-            assertEquals(StatusPedido.APROVADO, pedidoFinal.getStatus(), "O pedido processado com sucesso deve estar APROVADO");
+            assertEquals(StatusPedido.PENDENTE, pedidoFinal.getStatus(), "O pedido recém-criado deve nascer estritamente como PENDENTE");
 
             // Compara com 0 usando compareTo para ignorar problemas de precisão e zeros à direita
             assertEquals(0, new BigDecimal("250.00").compareTo(pedidoFinal.getValorTotal()), "O valor total orquestrado deve ser a soma exata dos comandos");
 
-            // Assert - Validações do Efeito Colateral na Entidade Local (Mutação de Saldo)
-            assertEquals(0, new BigDecimal("750.00").compareTo(parceiroRealDoDominio.getLimiteCredito()),
-                    "O limite de crédito do parceiro DEVE ter sido deduzido em memória para persistência atômica posterior");
+            // Assert - Garantia Arquitetural: O limite de crédito NÃO DEVE ser deduzido na criação
+            assertEquals(0, new BigDecimal("1000.00").compareTo(parceiroRealDoDominio.getLimiteCredito()),
+                    "O limite de crédito do parceiro deve permanecer intacto na fase de processamento inicial");
 
             // Assert - Auditoria Arquitetural (Mockito Verification)
             // 1. Capturamos o que foi enviado para o banco
@@ -165,8 +166,8 @@ class ProcessarPedidoUseCaseTest {
             // Arrange
             ProcessarPedidoCommand command = new ProcessarPedidoCommand(99L, Set.of(new ItemCommand("PROD-1", 1, BigDecimal.TEN)));
 
-            // Simulamos o banco não encontrando ninguém (Pessimistic Lock falhou)
-            when(parceiroRepository.findByIdWithPessimisticLock(99L)).thenReturn(Optional.empty());
+            // Simulamos o banco não encontrando ninguém (leitura simples sem lock)
+            when(parceiroRepository.findById(99L)).thenReturn(Optional.empty());
 
             // Act & Assert
             IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
@@ -176,32 +177,6 @@ class ProcessarPedidoUseCaseTest {
 
             // GARANTIA DE OURO: O sistema abortou rápido e NENHUM dado sujo foi mandado pro banco ou mensageria
             verifyNoInteractions(pedidoRepository, eventPublisher);
-        }
-
-        @Test
-        @DisplayName("Deve barrar, subir erro do domínio e NÃO persistir NADA quando saldo for insuficiente")
-        void deveFalharEProtegerBancoQuandoSaldoInsuficiente() {
-            // Arrange
-            ProcessarPedidoCommand command = new ProcessarPedidoCommand(99L, Set.of(
-                    new ItemCommand("MAQUINA-CARA", 1, new BigDecimal("50000.00"))
-            ));
-
-            // Parceiro pobre, com apenas 100 reais de crédito
-            Parceiro parceiroSemLimite = new Parceiro("Bayer Sul", "22222222222222", new BigDecimal("100.00"));
-            when(parceiroRepository.findByIdWithPessimisticLock(99L)).thenReturn(Optional.of(parceiroSemLimite));
-
-            // Act & Assert
-            // A exceção tem que subir livremente do Parceiro.debitarCredito() passando pelo UseCase sem ser mascarada
-            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
-                    useCase.execute(command)
-            );
-            assertEquals("Crédito insuficiente para o parceiro: 22222222222222", exception.getMessage());
-
-            // GARANTIA DE OURO: Prevenção absoluta de inconsistência transacional e filas mortas
-            verifyNoInteractions(pedidoRepository, eventPublisher);
-
-            // O estado da entidade em memória deve ter sido protegido pelo Fail-Fast interno do Domínio
-            assertEquals(0, new BigDecimal("100.00").compareTo(parceiroSemLimite.getLimiteCredito()));
         }
 
         @Test

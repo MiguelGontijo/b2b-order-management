@@ -17,11 +17,12 @@ import java.util.Set;
 import static org.hibernate.internal.util.collections.ArrayHelper.forEach;
 
 /**
- * Caso de Uso (Interactor) responsável por orquestrar a criação e aprovação financeira de um Pedido B2B.
+ * Caso de Uso (Interactor) responsável por orquestrar a recepção e criação de um Pedido B2B.
  * <p>
- * Atua como uma fronteira transacional estrita. O uso da Injeção de Dependência foca
- * exclusivamente na orquestração: as regras matemáticas de crédito e status pertencem
- * às Entidades de Domínio.
+ * Atua como uma fronteira transacional estrita focada apenas no registro
+ * da intenção de compra. A separação de responsabilidades garante que o pedido
+ * nasça com status PENDENTE e sem travas de banco (Locks), delegando a dedução
+ * financeira de limite para o fluxo de aprovação específico.
  * </p>
  *
  * @author Miguel
@@ -44,55 +45,46 @@ public class ProcessarPedidoUseCase {
     }
 
     /**
-     * Executa o fluxo de processamento de um novo pedido.
+     * Executa o fluxo de recepção e criação de um novo pedido.
      * <p>
-     * <b>Decisão Arquitetural Sênior (Concorrência e ACID):</b>
-     * A anotação @Transactional garante que toda essa operação ocorra de forma atômica no PostgreSQL.
-     * Ao buscar o Parceiro, o repositório aciona o Pessimistic Lock (SELECT ... FOR UPDATE).
-     * Isso significa que se 5 requisições de pedidos chegarem no mesmo milissegundo para o
-     * mesmo parceiro, o banco enfileirará as transações, executando uma por vez, garantindo
-     * matematicamente que o limite de crédito nunca ficará negativo.
+     * <b>Decisão Arquitetural:</b>
+     * A anotação @Transactional garante a atomicidade da gravação do pedido e seus itens.
+     * Removemos a trava pessimista (Pessimistic Lock) e o débito financeiro desta fase
+     * para permitir altíssima vazão (Throughput) de recepção de requisições. O pedido
+     * nasce imutável em seu estado inicial (PENDENTE).
      * </p>
      *
      * @param command Objeto de transferência (DTO interno) contendo a intenção de compra.
-     * @return O Pedido processado, salvo e com status atualizado.
+     * @return O Pedido criado, salvo e com status PENDENTE.
      */
     @Transactional
     public Pedido execute(ProcessarPedidoCommand command) {
         Objects.requireNonNull(command, "O comando de processamento não pode ser nulo");
 
-        // 1. Busca o Parceiro com trava física de escrita (Pessimistic Lock)
-        Parceiro parceiro = parceiroRepository.findByIdWithPessimisticLock(command.parceiroId())
+        // 1. Busca o Parceiro sem travas físicas de escrita, apenas para atrelar a FK do novo registro
+        Parceiro parceiro = parceiroRepository.findById(command.parceiroId())
                 .orElseThrow(() -> new IllegalArgumentException("Parceiro não encontrado para o ID: " + command.parceiroId()));
 
-        // 2. Instancia a Raiz de Agregação (O Pedido)
+        // 2. Instancia a Raiz de Agregação (O Pedido nasce como PENDENTE e com valor ZERO via construtor)
         Pedido pedido = new Pedido(parceiro);
 
         // 3. Constrói e aninha os Itens ao Pedido (O total é incrementado nativamente na memória)
         command.itens().stream().map(
                 it -> new ItemPedido(
-                    pedido,
-                    it.produtoId(),
-                    it.quantidade(),
-                    it.precoUnitario()
+                        pedido,
+                        it.produtoId(),
+                        it.quantidade(),
+                        it.precoUnitario()
                 )
         ).forEach(pedido::adicionarItem);
 
-        // 4. Executa a Regra Financeira: Tenta debitar o valor total calculado do limite do Parceiro.
-        // Se falhar (falta de limite), lança IllegalArgumentException e a transação do banco sofre ROLLBACK automático.
-        parceiro.debitarCredito(pedido.getValorTotal());
+        // 4. Persiste o Pedido (Os itens são salvos na mesma transação via CascadeType.ALL)
+        Pedido pedidoSalvo = pedidoRepository.save(pedido);
 
-        // 5. Atualiza o status via Máquina de Estados do Domínio
-        pedido.transitarStatus(StatusPedido.APROVADO);
+        // 5. Arquitetura Orientada a Eventos: Dispara a notificação de criação do pedido de forma assíncrona
+        eventPublisher.publicarEventoStatus(pedidoSalvo);
 
-            // 6. Persiste o Pedido (Os itens e o novo saldo do parceiro são salvos na transação)
-            Pedido pedidoSalvo = pedidoRepository.save(pedido);
-
-            // 7. Arquitetura Orientada a Eventos: Dispara a notificação de forma assíncrona
-            // O caso de uso não sabe se é Kafka ou RabbitMQ, ele apenas confia no contrato.
-            eventPublisher.publicarEventoStatus(pedidoSalvo);
-
-            return pedidoSalvo;
+        return pedidoSalvo;
     }
 
     // =========================================================================================
