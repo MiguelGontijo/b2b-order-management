@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -186,7 +187,7 @@ class PedidoTest {
         @DisplayName("Deve ejetar modificações não autorizadas na coleção de itens via getter")
         void getItensDeveRetornarColecaoImutavel() {
             // Arrange
-            Set<ItemPedido> itensReadOnly = pedido.getItens();
+            List<ItemPedido> itensReadOnly = pedido.getItens();
             ItemPedido itemFantasma = mock(ItemPedido.class);
 
             // Act & Assert

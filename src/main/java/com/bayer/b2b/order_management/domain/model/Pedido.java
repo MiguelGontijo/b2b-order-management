@@ -58,7 +58,7 @@ public class Pedido {
      * orphanRemoval = true: Se um item for removido da coleção em memória, será deletado no banco.
      */
     @OneToMany(mappedBy = "pedido", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Set<ItemPedido> itens = new HashSet<>();
+    private List<ItemPedido> itens = new ArrayList<>();
 
     /**
      * Construtor protegido exigido pelo framework JPA/Hibernate.
@@ -184,17 +184,16 @@ public class Pedido {
     }
 
     /**
-     * Retorna uma visualização imutável (Read-Only) da coleção de itens.
+     * Retorna a coleção de itens de forma imutável (Read-Only).
      * <p>
-     * Esta blindagem impede que desenvolvedores nas camadas superiores manipulem
-     * a coleção diretamente (ex: pedido.getItens().clear()), forçando-os a usar
-     * os comportamentos de negócio da entidade para qualquer mutação.
+     * Alteração Arquitetural (Correção de Bug): Utiliza List em vez de Set.
+     * Isso impede que o Java e o Hibernate façam um merge silencioso de itens
+     * idênticos (mesmo hashCode/equals), garantindo que um pedido B2B possa
+     * conter múltiplas linhas do mesmo produto (ex: uma linha paga, outra como bonificação).
      * </p>
-     *
-     * @return Set imutável contendo os itens do pedido.
      */
-    public Set<ItemPedido> getItens() {
-        return Collections.unmodifiableSet(itens);
+    public List<ItemPedido> getItens() {
+        return Collections.unmodifiableList(this.itens);
     }
 
     // =========================================================================================

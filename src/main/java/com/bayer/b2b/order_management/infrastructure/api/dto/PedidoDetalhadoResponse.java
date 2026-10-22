@@ -5,7 +5,7 @@ import com.bayer.b2b.order_management.domain.model.Pedido;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.Set;
+import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -22,28 +22,36 @@ import java.util.stream.Collectors;
  */
 public record PedidoDetalhadoResponse(
         UUID id,
+        Long parceiroId,
         String cnpjParceiro,
         String status,
         BigDecimal valorTotal,
         Instant dataCriacao,
-        Set<ItemPedidoResponse> itens
+        Instant dataUltimaAtualizacao,
+        List<ItemPedidoResponse> itens
 ) {
 
     /**
      * Factory Method para traduzir o Aggregate Root em um payload JSON detalhado,
      * impedindo vazamento de métodos ou lógicas de domínio para a interface do cliente.
+     * <p>
+     * Alteração Arquitetural: Estrutura migrada para List, preservando a cardinalidade
+     * original de compra e evitando supressão silenciosa de itens repetidos no JSON.
+     * </p>
      */
     public static PedidoDetalhadoResponse from(Pedido pedido) {
-        Set<ItemPedidoResponse> itensTraduzidos = pedido.getItens().stream()
+        List<ItemPedidoResponse> itensTraduzidos = pedido.getItens().stream()
                 .map(ItemPedidoResponse::from)
-                .collect(Collectors.toSet());
+                .collect(Collectors.toList());
 
         return new PedidoDetalhadoResponse(
                 pedido.getId(),
+                pedido.getParceiro().getId(),
                 pedido.getParceiro().getCnpj(),
                 pedido.getStatus().name(),
                 pedido.getValorTotal(),
-                pedido.getDataCriacao(), // Resolve o gap da data dinâmica apontado na análise de arquitetura
+                pedido.getDataCriacao(),
+                pedido.getDataUltimaAtualizacao(),
                 itensTraduzidos
         );
     }

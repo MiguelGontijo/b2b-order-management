@@ -28,7 +28,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
 import static org.mockito.Mockito.*;
@@ -69,15 +68,17 @@ class PedidoConsultaControllerIT {
     void setUp() {
         pedidoIdAlvo = UUID.randomUUID();
         Parceiro parceiro = new Parceiro("Bayer B2B Client", "88888888888888", new BigDecimal("100000.00"));
+        ReflectionTestUtils.setField(parceiro, "id", 99L);
 
         pedidoMock = new Pedido(parceiro);
         ReflectionTestUtils.setField(pedidoMock, "id", pedidoIdAlvo);
         ReflectionTestUtils.setField(pedidoMock, "dataCriacao", Instant.parse("2026-10-22T10:00:00Z"));
+        ReflectionTestUtils.setField(pedidoMock, "dataUltimaAtualizacao", Instant.parse("2026-10-22T10:30:00Z"));
         ReflectionTestUtils.setField(pedidoMock, "status", StatusPedido.APROVADO);
         ReflectionTestUtils.setField(pedidoMock, "valorTotal", new BigDecimal("1500.00"));
 
         ItemPedido item = new ItemPedido(pedidoMock, "SKU-AGRO-001", 10, new BigDecimal("150.00"));
-        ReflectionTestUtils.setField(pedidoMock, "itens", Set.of(item));
+        ReflectionTestUtils.setField(pedidoMock, "itens", List.of(item));
     }
 
     @Nested
@@ -98,10 +99,12 @@ class PedidoConsultaControllerIT {
 
                     // Validação das raízes do DTO
                     .andExpect(jsonPath("$.id").value(pedidoIdAlvo.toString()))
+                    .andExpect(jsonPath("$.parceiroId").value(99))
                     .andExpect(jsonPath("$.cnpjParceiro").value("88888888888888"))
                     .andExpect(jsonPath("$.status").value("APROVADO"))
                     .andExpect(jsonPath("$.valorTotal").value(1500.00))
                     .andExpect(jsonPath("$.dataCriacao").value("2026-10-22T10:00:00Z"))
+                    .andExpect(jsonPath("$.dataUltimaAtualizacao").value("2026-10-22T10:30:00Z"))
 
                     // Validação da ramificação da nota fiscal (Itens Aninhados)
                     .andExpect(jsonPath("$.itens").isArray())

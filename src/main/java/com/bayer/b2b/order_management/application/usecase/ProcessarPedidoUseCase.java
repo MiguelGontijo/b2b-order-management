@@ -3,7 +3,6 @@ package com.bayer.b2b.order_management.application.usecase;
 import com.bayer.b2b.order_management.domain.model.ItemPedido;
 import com.bayer.b2b.order_management.domain.model.Parceiro;
 import com.bayer.b2b.order_management.domain.model.Pedido;
-import com.bayer.b2b.order_management.domain.model.StatusPedido;
 import com.bayer.b2b.order_management.domain.port.OrderEventPublisherPort;
 import com.bayer.b2b.order_management.infrastructure.database.ParceiroRepository;
 import com.bayer.b2b.order_management.infrastructure.database.PedidoRepository;
@@ -11,8 +10,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 
 import static org.hibernate.internal.util.collections.ArrayHelper.forEach;
 
@@ -91,12 +90,20 @@ public class ProcessarPedidoUseCase {
     // DTOs de Entrada (Commands) usando Records para garantir Imutabilidade e Alta Coesão
     // =========================================================================================
 
+    /**
+     * DTO interno (Command) que carrega a intenção de negócio para dentro do UseCase.
+     * <p>
+     * Alteração Arquitetural: Utiliza List em vez de Set para a coleção de itens,
+     * permitindo que pedidos corporativos com linhas idênticas (mesmo produto e preço)
+     * não sejam aglutinados indevidamente pela JVM.
+     * </p>
+     */
     public record ProcessarPedidoCommand(
             Long parceiroId,
-            Set<ItemCommand> itens
+            List<ItemCommand> itens
     ) {
         public ProcessarPedidoCommand {
-            Objects.requireNonNull(parceiroId, "O ID do parceiro é obrigatório");
+            java.util.Objects.requireNonNull(parceiroId, "O ID do parceiro é obrigatório");
             if (itens == null || itens.isEmpty()) {
                 throw new IllegalArgumentException("O pedido deve conter pelo menos um item");
             }

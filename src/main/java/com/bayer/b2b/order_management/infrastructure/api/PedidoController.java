@@ -4,6 +4,8 @@ import com.bayer.b2b.order_management.application.usecase.ProcessarPedidoUseCase
 import com.bayer.b2b.order_management.application.usecase.ProcessarPedidoUseCase.ItemCommand;
 import com.bayer.b2b.order_management.application.usecase.ProcessarPedidoUseCase.ProcessarPedidoCommand;
 import com.bayer.b2b.order_management.domain.model.Pedido;
+import com.bayer.b2b.order_management.infrastructure.api.dto.PedidoResumoResponse;
+import com.bayer.b2b.order_management.infrastructure.api.dto.ProcessarPedidoRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -15,11 +17,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-import java.math.BigDecimal;
 import java.net.URI;
-import java.time.Instant;
+import java.util.List;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -35,7 +35,7 @@ import java.util.stream.Collectors;
  */
 @RestController
 @RequestMapping("/api/v1/pedidos")
-@Tag(name = "Pedidos de Compra B2B", description = "Endpoints para orquestração transacional de compras, débito de saldo e notificação assíncrona (Logística/Faturamento).")
+@Tag(name = "Pedidos de Compra B2B", description = "Endpoints para orquestração transacional de compras e recepção de pedidos.")
 public class PedidoController {
 
     private final ProcessarPedidoUseCase processarPedidoUseCase;
@@ -55,29 +55,30 @@ public class PedidoController {
     @PostMapping
     @Operation(
             summary = "Submete um pedido de compra corporativa",
-            description = "Recebe os itens, aciona o Pessimistic Lock para garantir exclusividade de saldo no PostgreSQL, debita o limite do cliente, salva o pedido e publica um evento assíncrono de APROVADO via Apache Kafka."
+            description = "Recebe a intenção de compra, processa a lista de itens preservando duplicidades (List) e salva o pedido em altíssima vazão como PENDENTE. A dedução financeira ocorre posteriormente em endpoint de aprovação."
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "201", description = "Pedido processado com sucesso, saldo debitado e evento Kafka publicado."),
-            @ApiResponse(responseCode = "422", description = "Regra de negócio violada (Ex: Limite de crédito insuficiente ou parceiro não encontrado).")
+            @ApiResponse(responseCode = "201", description = "Pedido recepcionado e criado com sucesso (Status PENDENTE)."),
+            @ApiResponse(responseCode = "422", description = "Regra de negócio violada na validação estrutural do pedido.")
     })
-    public ResponseEntity<PedidoResponse> processarPedido(@RequestBody ProcessarPedidoRequest payload) {
+    public ResponseEntity<PedidoResumoResponse> processarPedido(@RequestBody ProcessarPedidoRequest payload) {
 
         // 1. Tradução Limpa (Web DTO -> Core Command) utilizando Streams Funcionais
-        Set<ItemCommand> itensCommand = payload.itens().stream()
+        // Alteração Arquitetural: Uso de List em vez de Set para preservar cardinalidade dos itens idênticos
+        List<ItemCommand> itensCommand = payload.itens().stream()
                 .map(it -> new ItemCommand(
                         it.produtoId(),
                         it.quantidade(),
                         it.precoUnitario()
                 ))
-                .collect(Collectors.toSet());
+                .collect(Collectors.toList());
 
         ProcessarPedidoCommand command = new ProcessarPedidoCommand(
                 payload.parceiroId(),
                 itensCommand
         );
 
-        // 2. Orquestração Transacional (Valida Saldo, Cria Pedido, Salva no DB, Dispara Kafka)
+        // 2. Orquestração Transacional (Cria Pedido PENDENTE, Salva no DB, Dispara Evento de Criação)
         Pedido pedidoProcessado = processarPedidoUseCase.execute(command);
 
         // 3. Montagem do cabeçalho RESTful e tradução da resposta
@@ -86,43 +87,7 @@ public class PedidoController {
                 .buildAndExpand(pedidoProcessado.getId())
                 .toUri();
 
-        return ResponseEntity.created(location).body(PedidoResponse.from(pedidoProcessado));
+        return ResponseEntity.created(location).body(PedidoResumoResponse.from(pedidoProcessado));
     }
 
-    // =========================================================================================
-    // DTOs Aninhados - Isolamento de Contrato de API (Nested Records)
-    // =========================================================================================
-
-    public record ProcessarPedidoRequest(
-            Long parceiroId,
-            Set<ItemPedidoRequest> itens
-    ) {}
-
-    public record ItemPedidoRequest(
-            String produtoId,
-            Integer quantidade,
-            BigDecimal precoUnitario
-    ) {}
-
-    public record PedidoResponse(
-            UUID id,
-            String cnpjParceiro,
-            String status,
-            BigDecimal valorTotal,
-            Instant dataCriacao
-    ) {
-        /**
-         * Factory Method para achatar (flatten) e traduzir a Entidade Rica em um JSON amigável,
-         * expondo apenas os dados não-sensíveis para a interface do cliente.
-         */
-        public static PedidoResponse from(Pedido pedido) {
-            return new PedidoResponse(
-                    pedido.getId(),
-                    pedido.getParceiro().getCnpj(),
-                    pedido.getStatus().name(),
-                    pedido.getValorTotal(),
-                    Instant.now() // Em um sistema real, extrairíamos a data de auditoria da entidade
-            );
-        }
-    }
 }

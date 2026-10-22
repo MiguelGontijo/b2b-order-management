@@ -4,8 +4,7 @@ import com.bayer.b2b.order_management.application.usecase.ProcessarPedidoUseCase
 import com.bayer.b2b.order_management.application.usecase.ProcessarPedidoUseCase.ProcessarPedidoCommand;
 import com.bayer.b2b.order_management.domain.model.Parceiro;
 import com.bayer.b2b.order_management.domain.model.Pedido;
-import com.bayer.b2b.order_management.infrastructure.api.PedidoController.ItemPedidoRequest;
-import com.bayer.b2b.order_management.infrastructure.api.PedidoController.ProcessarPedidoRequest;
+import com.bayer.b2b.order_management.infrastructure.api.dto.ProcessarPedidoRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -20,6 +19,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -73,8 +73,8 @@ class PedidoControllerIT {
         @DisplayName("Deve retornar 201 Created, URI no Location e payload achatamdo ao processar pedido")
         void deveProcessarPedidoComSucesso() throws Exception {
             // Arrange - Payload JSON de Entrada simulando o cliente Web
-            ItemPedidoRequest itemRequest = new ItemPedidoRequest("PROD-001", 10, new BigDecimal("50.00"));
-            ProcessarPedidoRequest payloadRequest = new ProcessarPedidoRequest(99L, Set.of(itemRequest));
+            ProcessarPedidoRequest.ItemPedidoRequest itemRequest = new ProcessarPedidoRequest.ItemPedidoRequest("PROD-001", 10, new BigDecimal("50.00"));
+            ProcessarPedidoRequest payloadRequest = new ProcessarPedidoRequest(99L, List.of(itemRequest));
 
             // Arrange - Precisamos criar um stub da entidade rica que o UseCase teoricamente devolveria
             Parceiro parceiroSimulado = new Parceiro("Bayer Agro", "11111111111111", new BigDecimal("50000.00"));
@@ -117,8 +117,8 @@ class PedidoControllerIT {
         @DisplayName("Deve traduzir erro de Saldo Insuficiente do Domínio (IllegalArgumentException) para HTTP 422")
         void deveRetornar422QuandoSaldoEstourar() throws Exception {
             // Arrange - Submissão padrão
-            ItemPedidoRequest itemRequest = new ItemPedidoRequest("PROD-RARO", 1, new BigDecimal("999999.00"));
-            ProcessarPedidoRequest payloadRequest = new ProcessarPedidoRequest(99L, Set.of(itemRequest));
+            ProcessarPedidoRequest.ItemPedidoRequest itemRequest = new ProcessarPedidoRequest.ItemPedidoRequest("PROD-RARO", 1, new BigDecimal("999999.00"));
+            ProcessarPedidoRequest payloadRequest = new ProcessarPedidoRequest(99L, List.of(itemRequest));
 
             // Simulamos o domínio ativando a sua barreira Fail-Fast financeira
             when(processarPedidoUseCase.execute(any(ProcessarPedidoCommand.class)))
@@ -130,7 +130,7 @@ class PedidoControllerIT {
             mockMvc.perform(post("/api/v1/pedidos")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(payloadRequest)))
-                    .andExpect(status().isUnprocessableEntity()) // Exige rigorosamente código HTTP 422
+                    .andExpect(status().isUnprocessableContent()) // Exige rigorosamente código HTTP 422
                     .andExpect(jsonPath("$.error").value("Regra de Negócio Violada"))
                     .andExpect(jsonPath("$.message").value("Crédito insuficiente para o parceiro: 11111111111111"));
         }
@@ -139,7 +139,8 @@ class PedidoControllerIT {
         @DisplayName("Deve traduzir falha de carga vazia do Command (NullPointerException) para HTTP 422")
         void deveRetornar422QuandoPayloadVazio() throws Exception {
             // Arrange - Falta o ID do cliente
-            ProcessarPedidoRequest payloadSemCliente = new ProcessarPedidoRequest(null, Set.of(new ItemPedidoRequest("X", 1, BigDecimal.ONE)));
+            ProcessarPedidoRequest payloadSemCliente = new ProcessarPedidoRequest(null,
+                    List.of(new ProcessarPedidoRequest.ItemPedidoRequest("X", 1, BigDecimal.ONE)));
 
             when(processarPedidoUseCase.execute(any(ProcessarPedidoCommand.class)))
                     .thenThrow(new NullPointerException("O ID do parceiro é obrigatório"));
@@ -148,7 +149,7 @@ class PedidoControllerIT {
             mockMvc.perform(post("/api/v1/pedidos")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(payloadSemCliente)))
-                    .andExpect(status().isUnprocessableEntity()) // Erro tratado na malha externa
+                    .andExpect(status().isUnprocessableContent()) // Erro tratado na malha externa
                     .andExpect(jsonPath("$.error").value("Dados Obrigatórios Ausentes"));
         }
     }
