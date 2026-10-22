@@ -2,6 +2,7 @@ package com.bayer.b2b.order_management.infrastructure.database;
 
 import com.bayer.b2b.order_management.domain.model.Pedido;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -10,13 +11,14 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Adaptador de Infraestrutura responsável pela persistência da Raiz de Agregação (Pedido).
- *
- * @author Miguel
- * @version 1.0
+ * Repositório Spring Data JPA para o Agregado de Pedido.
+ * <p>
+ * Estende JpaSpecificationExecutor para habilitar a execução de consultas dinâmicas
+ * (Criteria API) focadas em paginação e filtros opcionais, garantindo performance
+ * ao evitar a explosão de métodos de consulta combinados.
+ * </p>
  */
-@Repository
-public interface PedidoRepository extends JpaRepository<Pedido, UUID> {
+public interface PedidoRepository extends JpaRepository<Pedido, UUID>, JpaSpecificationExecutor<Pedido> {
 
     /**
      * Busca o pedido e força o banco de dados a carregar os itens subordinados

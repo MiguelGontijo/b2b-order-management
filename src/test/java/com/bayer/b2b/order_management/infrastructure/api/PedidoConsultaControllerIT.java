@@ -1,6 +1,8 @@
 package com.bayer.b2b.order_management.infrastructure.api;
 
 import com.bayer.b2b.order_management.application.usecase.BuscarPedidoPorIdUseCase;
+import com.bayer.b2b.order_management.application.usecase.ConsultarPedidosUseCase;
+import com.bayer.b2b.order_management.application.usecase.PedidoFiltro;
 import com.bayer.b2b.order_management.domain.execption.GlobalExceptionHandler;
 import com.bayer.b2b.order_management.domain.execption.ResourceNotFoundException;
 import com.bayer.b2b.order_management.domain.model.ItemPedido;
@@ -14,6 +16,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -21,6 +27,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -51,6 +58,9 @@ class PedidoConsultaControllerIT {
 
     @MockitoBean
     private BuscarPedidoPorIdUseCase buscarPedidoPorIdUseCase;
+
+    @MockitoBean
+    private ConsultarPedidosUseCase consultarPedidosUseCase;
 
     private UUID pedidoIdAlvo;
     private Pedido pedidoMock;
@@ -142,6 +152,51 @@ class PedidoConsultaControllerIT {
 
             // Garantia Arquitetural: O UseCase não gasta processamento com requisições sujas
             verifyNoInteractions(buscarPedidoPorIdUseCase);
+        }
+    }
+
+    @Nested
+    @DisplayName("3. Listagem Paginada e Filtros Dinâmicos (Collection Resource)")
+    class ListagemPaginadaTests {
+
+        @Test
+        @DisplayName("Deve retornar status 200 OK e a página com a lista resumida de pedidos, sem expor os itens")
+        void deveRetornarPaginaDePedidosResumidosComStatus200() throws Exception {
+            // Arrange - Prepara os metadados de paginação e a página mockada
+            PageRequest pageable = PageRequest.of(0, 20);
+            Page<Pedido> paginaMock = new PageImpl<>(List.of(pedidoMock), pageable, 1);
+
+            // O Spring WebMvc instancia o Pageable internamente. Usamos any() para capturá-lo com segurança.
+            when(consultarPedidosUseCase.execute(any(PedidoFiltro.class), any(Pageable.class)))
+                    .thenReturn(paginaMock);
+
+            // Act & Assert
+            mockMvc.perform(get("/api/v1/pedidos")
+                            .param("status", "APROVADO")
+                            .param("page", "0")
+                            .param("size", "20")
+                            .accept(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+
+                    // Validação do Achatamento (Flattening) para o array de conteúdo
+                    .andExpect(jsonPath("$.content").isArray())
+                    .andExpect(jsonPath("$.content[0].id").value(pedidoIdAlvo.toString()))
+                    .andExpect(jsonPath("$.content[0].cnpjParceiro").value("88888888888888"))
+                    .andExpect(jsonPath("$.content[0].valorTotal").value(1500.00))
+                    .andExpect(jsonPath("$.content[0].status").value("APROVADO"))
+
+                    // Garantia Arquitetural de Performance: A lista de itens NÃO DEVE existir neste payload
+                    .andExpect(jsonPath("$.content[0].itens").doesNotExist())
+
+                    // Validação dos metadados estruturais do Page<T> do Spring Data
+                    .andExpect(jsonPath("$.totalElements").value(1))
+                    .andExpect(jsonPath("$.totalPages").value(1))
+                    .andExpect(jsonPath("$.size").value(20))
+                    .andExpect(jsonPath("$.number").value(0));
+
+            // Confirma que a orquestração repassou os filtros corretamente para o domínio
+            verify(consultarPedidosUseCase, times(1)).execute(any(PedidoFiltro.class), any(Pageable.class));
         }
     }
 }

@@ -1,12 +1,19 @@
 package com.bayer.b2b.order_management.infrastructure.api;
 
 import com.bayer.b2b.order_management.application.usecase.BuscarPedidoPorIdUseCase;
+import com.bayer.b2b.order_management.application.usecase.ConsultarPedidosUseCase;
+import com.bayer.b2b.order_management.application.usecase.PedidoFiltro;
 import com.bayer.b2b.order_management.domain.model.Pedido;
 import com.bayer.b2b.order_management.infrastructure.api.dto.PedidoDetalhadoResponse;
+import com.bayer.b2b.order_management.infrastructure.api.dto.PedidoResumoResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,9 +39,12 @@ import java.util.UUID;
 public class PedidoConsultaController {
 
     private final BuscarPedidoPorIdUseCase buscarPedidoPorIdUseCase;
+    private final ConsultarPedidosUseCase consultarPedidosUseCase;
 
-    public PedidoConsultaController(BuscarPedidoPorIdUseCase buscarPedidoPorIdUseCase) {
+    public PedidoConsultaController(BuscarPedidoPorIdUseCase buscarPedidoPorIdUseCase,
+                                    ConsultarPedidosUseCase consultarPedidosUseCase) {
         this.buscarPedidoPorIdUseCase = buscarPedidoPorIdUseCase;
+        this.consultarPedidosUseCase = consultarPedidosUseCase;
     }
 
     /**
@@ -58,5 +68,33 @@ public class PedidoConsultaController {
         Pedido pedido = buscarPedidoPorIdUseCase.execute(id);
 
         return ResponseEntity.ok(PedidoDetalhadoResponse.from(pedido));
+    }
+
+    /**
+     * Endpoint para listagem paginada e filtragem dinâmica de pedidos corporativos.
+     * <p>
+     * Recebe parâmetros opcionais de filtro via Query Parameters da URL e mapeia automaticamente
+     * para o record PedidoFiltro. Aplica a paginação nativa e converte a saída para um formato
+     * de resumo, garantindo alta performance e prevenção contra carregamento excessivo em memória.
+     * </p>
+     */
+    @GetMapping
+    @Operation(
+            summary = "Lista pedidos corporativos com paginação e filtros opcionais",
+            description = "Devolve uma lista resumida (sem a coleção de itens) otimizada para performance. Permite filtragem por status e período de data (UTC)."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Listagem paginada processada e retornada com sucesso.")
+    })
+    public ResponseEntity<Page<PedidoResumoResponse>> listar(
+            PedidoFiltro filtro,
+            @PageableDefault(size = 20, sort = "dataCriacao", direction = Sort.Direction.DESC) Pageable pageable) {
+
+        Page<Pedido> pedidosPage = consultarPedidosUseCase.execute(filtro, pageable);
+
+        // A função map do Page do Spring aplica o Factory Method para cada elemento do array
+        Page<PedidoResumoResponse> responsePage = pedidosPage.map(PedidoResumoResponse::from);
+
+        return ResponseEntity.ok(responsePage);
     }
 }
