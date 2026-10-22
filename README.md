@@ -33,20 +33,41 @@ A tabela abaixo resume como os requisitos arquiteturais foram abordados com padr
 
 O ambiente foi completamente containerizado para proporcionar uma experiência *"One-Click Run"*.
 
-### 1. Subir a Infraestrutura (Bancos e Broker)
-No terminal, navegue até a raiz do projeto (onde está o `docker-compose.yml`) e execute:
+### Pré-requisitos
+* Docker e Docker Compose (v2)
+
+Não é necessário ter Java ou Maven instalados: o build do jar acontece dentro da imagem Docker.
+
+### Executar tudo com um único comando
+Na raiz do projeto (onde está o `docker-compose.yml`):
 
 ```bash
-docker compose up -d
+docker compose up --build
 ```
 
-### 2. Rodar a Aplicação Spring Boot
-Utilize o wrapper do Maven para compilar e iniciar a aplicação:
+O comando sobe PostgreSQL, MongoDB, Kafka e a aplicação, nessa ordem. A aplicação só inicia depois que os três ficam *healthy*. Ela fica disponível em `http://localhost:8080`, e a saúde pode ser conferida em `http://localhost:8080/actuator/health`.
+
+Para parar e remover os containers:
 
 ```bash
+docker compose down
+```
+
+### Rodar a aplicação fora do Docker (desenvolvimento)
+Requer JDK 21. Suba apenas a infraestrutura e rode a aplicação pelo Maven Wrapper:
+
+```bash
+docker compose up -d postgres mongodb kafka
 ./mvnw spring-boot:run
 ```
-A aplicação subirá na porta 8080.
+
+Nesse modo a aplicação usa as portas expostas no host, configuradas no `application.yaml`: Postgres em `5435`, Mongo em `27017` e Kafka em `9094`.
+
+### Testes
+
+```bash
+./mvnw test
+```
 
 ### 📖 Documentação da API (Swagger)
 
