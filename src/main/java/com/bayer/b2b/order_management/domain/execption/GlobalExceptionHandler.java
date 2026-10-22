@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.time.Instant;
 
@@ -15,7 +16,7 @@ import java.time.Instant;
  * Atua como um interceptador centralizado de erros em toda a camada REST.
  * Garante que exceções de negócio (lançadas pelo Domínio) não vazem
  * stacktraces (erros 500) para o cliente externo. Ele captura as falhas e as traduz
- * para um formato JSON padronizado e com o HTTP Status correto (ex: 422).
+ * para um formato JSON padronizado e com o HTTP Status correto (ex: 422, 404).
  * </p>
  *
  * @author Miguel
@@ -25,6 +26,28 @@ import java.time.Instant;
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    /**
+     * Captura requisições para IDs ou recursos que não existem no banco de dados.
+     * <p>
+     * <b>Decisão Arquitetural:</b> Intercepta a exceção genérica do domínio e garante
+     * que a API responda estritamente com o HTTP Status 404 (Not Found), mantendo a
+     * semântica da RFC REST.
+     * </p>
+     */
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<StandardError> handleResourceNotFoundException(ResourceNotFoundException e) {
+        log.warn("[RECURSO INEXISTENTE] Consulta não encontrou dados: {}", e.getMessage());
+
+        StandardError error = new StandardError(
+                Instant.now(),
+                HttpStatus.NOT_FOUND.value(),
+                "Recurso Não Localizado",
+                e.getMessage()
+        );
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    }
 
     /**
      * Captura qualquer IllegalArgumentException lançada pelos Casos de Uso ou Entidades.
@@ -90,6 +113,28 @@ public class GlobalExceptionHandler {
         );
 
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+    }
+
+    /**
+     * Captura falhas de conversão de tipos na URL (ex: UUID malformado no PathVariable).
+     * <p>
+     * <b>Decisão Arquitetural:</b> Protege a borda da aplicação bloqueando requisições com
+     * parâmetros ilegítimos antes de acionar o UseCase. A resposta padronizada com HTTP 400
+     * (Bad Request) orienta o consumidor da API a corrigir o formato do dado.
+     * </p>
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<StandardError> handleMethodArgumentTypeMismatchException(MethodArgumentTypeMismatchException e) {
+        log.warn("[PARÂMETRO INVÁLIDO] Falha de conversão de tipo na requisição: {}", e.getMessage());
+
+        StandardError error = new StandardError(
+                Instant.now(),
+                HttpStatus.BAD_REQUEST.value(),
+                "Parâmetro de URL Inválido",
+                "O valor informado para o parâmetro '" + e.getName() + "' não possui um formato suportado."
+        );
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 
     // =========================================================================================
