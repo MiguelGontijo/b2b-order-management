@@ -5,7 +5,7 @@ spring:
   application:
     name: order-management
 
-  # 1. Configuração do PostgreSQL (Transacional)
+  # 1. Configuração do PostgreSQL (Transacional e Outbox)
   datasource:
     url: jdbc:postgresql://localhost:5435/b2b_orders_db
     username: admin
@@ -20,12 +20,13 @@ spring:
       hibernate:
         format_sql: true
 
-  # 2. Configuração do MongoDB (Resiliência / DLQ)
+  # 2. Configuração do MongoDB (Cofre de Idempotência)
   mongodb:
     uri: mongodb://admin:admin_password@localhost:27017/b2b_orders_db?authSource=admin
     representation:
       uuid: standard
-  # 3. Configuração do Apache Kafka
+
+  # 3. Configuração do Apache Kafka (Mensageria Resiliente)
   kafka:
     bootstrap-servers: localhost:9094
     producer:
@@ -35,6 +36,9 @@ spring:
       group-id: b2b-order-group
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      # BLINDAGEM CLASSE OURO (Poison Pill Prevention): Evita crash loops em caso de payload corrompido
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       properties:
+        # Delegação: Informa ao tratador de erros qual é o deserializador real de negócio
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
         spring.json.trusted.packages: "*"
