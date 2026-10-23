@@ -61,7 +61,7 @@ class KafkaOrderEventPublisherTest {
     void setUp() {
         // Preparamos um Pedido rico em memória para servir de payload para os eventos
         Parceiro parceiro = new Parceiro("Bayer Agro", "11111111111111", new BigDecimal("50000.00"));
-        pedidoBase = new Pedido(parceiro);
+        pedidoBase = new Pedido(parceiro, "ERP-123");
         pedidoBase.aprovar();
         pedidoBase.incrementarValorTotal(new BigDecimal("1500.00"));
     }

@@ -74,11 +74,11 @@ class PedidoControllerIT {
         void deveProcessarPedidoComSucesso() throws Exception {
             // Arrange - Payload JSON de Entrada simulando o cliente Web
             ProcessarPedidoRequest.ItemPedidoRequest itemRequest = new ProcessarPedidoRequest.ItemPedidoRequest("PROD-001", 10, new BigDecimal("50.00"));
-            ProcessarPedidoRequest payloadRequest = new ProcessarPedidoRequest(99L, List.of(itemRequest));
+            ProcessarPedidoRequest payloadRequest = new ProcessarPedidoRequest(99L, "ERP-123", List.of(itemRequest));
 
             // Arrange - Precisamos criar um stub da entidade rica que o UseCase teoricamente devolveria
             Parceiro parceiroSimulado = new Parceiro("Bayer Agro", "11111111111111", new BigDecimal("50000.00"));
-            Pedido pedidoSimulado = new Pedido(parceiroSimulado) {
+            Pedido pedidoSimulado = new Pedido(parceiroSimulado, "ERP-123") {
                 // Truque arquitetural sem ferir o encapsulamento: forçamos um UUID estático na subclasse anônima
                 // para que a validação do header "Location" e do JSON de resposta não falhem por causa de IDs randômicos.
                 private final UUID idFixo = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
@@ -118,7 +118,7 @@ class PedidoControllerIT {
         void deveRetornar422QuandoSaldoEstourar() throws Exception {
             // Arrange - Submissão padrão
             ProcessarPedidoRequest.ItemPedidoRequest itemRequest = new ProcessarPedidoRequest.ItemPedidoRequest("PROD-RARO", 1, new BigDecimal("999999.00"));
-            ProcessarPedidoRequest payloadRequest = new ProcessarPedidoRequest(99L, List.of(itemRequest));
+            ProcessarPedidoRequest payloadRequest = new ProcessarPedidoRequest(99L, "ERP-123", List.of(itemRequest));
 
             // Simulamos o domínio ativando a sua barreira Fail-Fast financeira
             when(processarPedidoUseCase.execute(any(ProcessarPedidoCommand.class)))
@@ -130,27 +130,33 @@ class PedidoControllerIT {
             mockMvc.perform(post("/api/v1/pedidos")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(payloadRequest)))
+                    .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
                     .andExpect(status().isUnprocessableContent()) // Exige rigorosamente código HTTP 422
-                    .andExpect(jsonPath("$.error").value("Regra de Negócio Violada"))
-                    .andExpect(jsonPath("$.message").value("Crédito insuficiente para o parceiro: 11111111111111"));
+                    .andExpect(jsonPath("$.title").value("Validação de Negócio Violada"))
+                    .andExpect(jsonPath("$.detail").value("Crédito insuficiente para o parceiro: 11111111111111"));
         }
 
         @Test
-        @DisplayName("Deve traduzir falha de carga vazia do Command (NullPointerException) para HTTP 422")
-        void deveRetornar422QuandoPayloadVazio() throws Exception {
+        @DisplayName("Deve barrar payload sem parceiro na fronteira (Bean Validation) retornando HTTP 400")
+        void deveRetornar400QuandoPayloadFalharNoBeanValidation() throws Exception {
             // Arrange - Falta o ID do cliente
-            ProcessarPedidoRequest payloadSemCliente = new ProcessarPedidoRequest(null,
-                    List.of(new ProcessarPedidoRequest.ItemPedidoRequest("X", 1, BigDecimal.ONE)));
+            ProcessarPedidoRequest payloadSemCliente = new ProcessarPedidoRequest(
+                    null, // parceiroId nulo para acionar o @NotNull da fronteira
+                    "ERP-123",
+                    List.of(new ProcessarPedidoRequest.ItemPedidoRequest("X", 1, BigDecimal.ONE))
+            );
 
-            when(processarPedidoUseCase.execute(any(ProcessarPedidoCommand.class)))
-                    .thenThrow(new NullPointerException("O ID do parceiro é obrigatório"));
+            // O mock do UseCase foi removido, pois o @Valid bloqueia o fluxo ANTES de chegar nele.
 
             // Act & Assert
             mockMvc.perform(post("/api/v1/pedidos")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(payloadSemCliente)))
-                    .andExpect(status().isUnprocessableContent()) // Erro tratado na malha externa
-                    .andExpect(jsonPath("$.error").value("Dados Obrigatórios Ausentes"));
+                    .andExpect(status().isBadRequest()) // Agora exige 400 Bad Request
+                    .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                    .andExpect(jsonPath("$.title").value("Falha na Validação dos Dados"))
+                    // Valida se o mapa de violações mapeou exatamente o campo que falhou
+                    .andExpect(jsonPath("$.violacoes.parceiroId").value("O ID do parceiro é obrigatório"));
         }
     }
 }

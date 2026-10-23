@@ -2,7 +2,9 @@ package com.bayer.b2b.order_management.infrastructure.api;
 
 import com.bayer.b2b.order_management.application.usecase.CadastrarParceiroUseCase;
 import com.bayer.b2b.order_management.application.usecase.CadastrarParceiroUseCase.CadastrarParceiroCommand;
+import com.bayer.b2b.order_management.domain.exception.CreditoInsuficienteException;
 import com.bayer.b2b.order_management.domain.model.Parceiro;
+import com.bayer.b2b.order_management.infrastructure.api.dto.CadastrarParceiroRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -76,8 +78,8 @@ class ParceiroControllerIT {
         @DisplayName("Deve retornar 201 Created, Header Location e o JSON de resposta ao cadastrar com sucesso")
         void deveRetornar201CreatedComLocationEPayload() throws Exception {
             // Arrange - Preparação do Request DTO
-            ParceiroController.CadastrarParceiroRequest payloadRequest =
-                    new ParceiroController.CadastrarParceiroRequest("Bayer Corp", "12345678901234", new BigDecimal("50000.00"));
+            CadastrarParceiroRequest payloadRequest =
+                    new CadastrarParceiroRequest("Bayer Corp", "12345678901234", new BigDecimal("50000.00"));
 
             // Arrange - Simulação da execução do Domínio (já atestamos essa lógica nos testes anteriores)
             // Usamos a engine de Reflection ou instanciamos a entidade e forçamos o ID (que não tem setter)
@@ -114,41 +116,39 @@ class ParceiroControllerIT {
     class FluxosExcecaoTests {
 
         @Test
-        @DisplayName("Deve traduzir IllegalArgumentException do Domínio para HTTP 422 Unprocessable Entity")
-        void deveRetornar422ParaRegraDeNegocioViolada() throws Exception {
+        @DisplayName("Deve barrar payload com limite negativo na fronteira (Bean Validation) retornando HTTP 400")
+        void deveRetornar400QuandoLimiteCreditoNegativo() throws Exception {
             // Arrange
-            // Um payload sintaticamente válido, mas com valor de negócio bloqueado pelo domínio (limite negativo)
-            ParceiroController.CadastrarParceiroRequest payloadRequest =
-                    new ParceiroController.CadastrarParceiroRequest("Bayer Europa", "99999999999999", new BigDecimal("-100.00"));
+            CadastrarParceiroRequest payloadRequest =
+                    new CadastrarParceiroRequest("Bayer Europa", "99999999999999", new BigDecimal("-100.00"));
 
-            // Simulamos o domínio lançando a exceção (Fail-Fast)
-            when(cadastrarParceiroUseCase.execute(any(CadastrarParceiroCommand.class)))
-                    .thenThrow(new IllegalArgumentException("O limite de crédito não pode ser negativo"));
+            // O mock do UseCase foi removido, pois o @Valid bloqueia o fluxo ANTES de chegar nele.
 
             // Act & Assert
-            // IMPORTANTE: Este teste exige a existência de um @ControllerAdvice global.
             mockMvc.perform(post("/api/v1/parceiros")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(payloadRequest)))
-                    .andExpect(status().isUnprocessableEntity()); // Exige HTTP 422
-            // Podem ser adicionadas validações do JSON de erro no futuro (ex: jsonPath("$.mensagem"))
+                    .andExpect(status().isBadRequest()) // Exige HTTP 400
+                    .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                    .andExpect(jsonPath("$.title").value("Falha na Validação dos Dados"))
+                    .andExpect(jsonPath("$.violacoes.limiteCredito").value("O limite de crédito não pode ser negativo"));
         }
 
         @Test
-        @DisplayName("Deve traduzir NullPointerException do Domínio para HTTP 422 Unprocessable Entity")
-        void deveRetornar422ParaDadosAusentesNoDominio() throws Exception {
-            // Arrange - Falta o CNPJ (null)
-            ParceiroController.CadastrarParceiroRequest payloadRequest =
-                    new ParceiroController.CadastrarParceiroRequest("Bayer Ásia", null, new BigDecimal("100.00"));
-
-            when(cadastrarParceiroUseCase.execute(any(CadastrarParceiroCommand.class)))
-                    .thenThrow(new NullPointerException("O CNPJ não pode ser nulo"));
+        @DisplayName("Deve barrar payload sem CNPJ na fronteira (Bean Validation) retornando HTTP 400")
+        void deveRetornar400QuandoCnpjAusente() throws Exception {
+            // Arrange
+            CadastrarParceiroRequest payloadRequest =
+                    new CadastrarParceiroRequest("Bayer Ásia", null, new BigDecimal("100.00"));
 
             // Act & Assert
             mockMvc.perform(post("/api/v1/parceiros")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(payloadRequest)))
-                    .andExpect(status().isUnprocessableEntity()); // Exige HTTP 422
+                    .andExpect(status().isBadRequest()) // Exige HTTP 400
+                    .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                    .andExpect(jsonPath("$.title").value("Falha na Validação dos Dados"))
+                    .andExpect(jsonPath("$.violacoes.cnpj").value("O CNPJ é obrigatório"));
         }
     }
 }

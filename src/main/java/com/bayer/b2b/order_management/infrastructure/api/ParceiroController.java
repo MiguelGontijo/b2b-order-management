@@ -2,10 +2,12 @@ package com.bayer.b2b.order_management.infrastructure.api;
 
 import com.bayer.b2b.order_management.application.usecase.CadastrarParceiroUseCase;
 import com.bayer.b2b.order_management.domain.model.Parceiro;
+import com.bayer.b2b.order_management.infrastructure.api.dto.CadastrarParceiroRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -44,6 +46,7 @@ public class ParceiroController {
      * <b>Decisão Arquitetural RESTful:</b> Ao criar um novo recurso no sistema,
      * o padrão exige que retornemos o HTTP Status 201 (Created) acompanhado de
      * um header 'Location' apontando para a URI do novo recurso.
+     * Além disso, a anotação @Valid garante a blindagem do payload na fronteira.
      * </p>
      */
     @PostMapping
@@ -53,9 +56,10 @@ public class ParceiroController {
     )
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Parceiro cadastrado com sucesso e limite liberado para uso."),
-            @ApiResponse(responseCode = "422", description = "Regra de negócio violada (Ex: CNPJ já existe ou limite inválido).")
+            @ApiResponse(responseCode = "400", description = "Falha de validação no payload (ex: CNPJ fora do padrão ou limite negativo)."),
+            @ApiResponse(responseCode = "422", description = "Regra de negócio violada (Ex: CNPJ já existe).")
     })
-    public ResponseEntity<ParceiroResponse> cadastrarParceiro(@RequestBody CadastrarParceiroRequest payload) {
+    public ResponseEntity<ParceiroResponse> cadastrarParceiro(@Valid @RequestBody CadastrarParceiroRequest payload) {
         // 1. Tradução da Web (DTO) para a estrutura do Motor (Command)
         CadastrarParceiroUseCase.CadastrarParceiroCommand command =
                 new CadastrarParceiroUseCase.CadastrarParceiroCommand(
@@ -80,13 +84,7 @@ public class ParceiroController {
     // DTOs Aninhados - Padrão de Alta Coesão (Nested Records)
     // =========================================================================================
 
-    public record CadastrarParceiroRequest(
-            String nome,
-            String cnpj,
-            BigDecimal limiteCredito
-    ) {}
-
-    public record ParceiroResponse(
+       public record ParceiroResponse(
             Long id,
             String nome,
             String cnpj,

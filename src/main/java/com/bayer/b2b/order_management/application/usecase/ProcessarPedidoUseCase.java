@@ -65,7 +65,7 @@ public class ProcessarPedidoUseCase {
                 .orElseThrow(() -> new IllegalArgumentException("Parceiro não encontrado para o ID: " + command.parceiroId()));
 
         // 2. Instancia a Raiz de Agregação (O Pedido nasce como PENDENTE e com valor ZERO via construtor)
-        Pedido pedido = new Pedido(parceiro);
+        Pedido pedido = new Pedido(parceiro, command.codigoPedidoOrigem());
 
         // 3. Constrói e aninha os Itens ao Pedido (O total é incrementado nativamente na memória)
         command.itens().stream().map(
@@ -93,17 +93,24 @@ public class ProcessarPedidoUseCase {
     /**
      * DTO interno (Command) que carrega a intenção de negócio para dentro do UseCase.
      * <p>
-     * Alteração Arquitetural: Utiliza List em vez de Set para a coleção de itens,
+     * Alteração Arquitetural: Inclusão do 'codigoPedidoOrigem' para garantir a idempotência
+     * nativa (Business Key Constraint) contra duplicidades de rede.
+     * Utiliza List em vez de Set para a coleção de itens,
      * permitindo que pedidos corporativos com linhas idênticas (mesmo produto e preço)
      * não sejam aglutinados indevidamente pela JVM.
      * </p>
      */
     public record ProcessarPedidoCommand(
             Long parceiroId,
+            String codigoPedidoOrigem,
             List<ItemCommand> itens
     ) {
         public ProcessarPedidoCommand {
             java.util.Objects.requireNonNull(parceiroId, "O ID do parceiro é obrigatório");
+            java.util.Objects.requireNonNull(codigoPedidoOrigem, "O código de origem do pedido é obrigatório");
+            if (codigoPedidoOrigem.isBlank()) {
+                throw new IllegalArgumentException("O código de origem do pedido não pode estar em branco");
+            }
             if (itens == null || itens.isEmpty()) {
                 throw new IllegalArgumentException("O pedido deve conter pelo menos um item");
             }

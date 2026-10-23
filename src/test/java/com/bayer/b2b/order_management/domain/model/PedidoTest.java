@@ -1,5 +1,6 @@
 package com.bayer.b2b.order_management.domain.model;
 
+import com.bayer.b2b.order_management.domain.exception.TransicaoStatusInvalidaException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -36,7 +37,7 @@ class PedidoTest {
     @BeforeEach
     void setUp() {
         parceiroMock = mock(Parceiro.class);
-        pedido = new Pedido(parceiroMock);
+        pedido = new Pedido(parceiroMock, "ERP-123");
     }
 
     @Nested
@@ -57,7 +58,7 @@ class PedidoTest {
         @DisplayName("Deve lançar NullPointerException ao tentar criar pedido sem Parceiro atrelado")
         void deveFalharQuandoParceiroForNulo() {
             NullPointerException exception = assertThrows(NullPointerException.class, () ->
-                    new Pedido(null)
+                    new Pedido(null, "ERP-123")
             );
             assertEquals("O parceiro do pedido não pode ser nulo", exception.getMessage());
         }
@@ -101,7 +102,7 @@ class PedidoTest {
             // Arrange (Pedido já nasce PENDENTE)
 
             // Act & Assert (Pendente -> Entregue é proibido. O método entregar() força transição para ENTREGUE)
-            IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+            TransicaoStatusInvalidaException exception = assertThrows(TransicaoStatusInvalidaException.class, () ->
                     pedido.entregar()
             );
 
@@ -121,7 +122,7 @@ class PedidoTest {
             assertEquals(StatusPedido.CANCELADO, pedido.getStatus());
 
             // Act & Assert: Um pedido morto não pode ser ressuscitado
-            IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+            TransicaoStatusInvalidaException exception = assertThrows(TransicaoStatusInvalidaException.class, () ->
                     pedido.aprovar()
             );
             assertEquals("Violação da Máquina de Estados: O pedido não pode transitar de CANCELADO para APROVADO", exception.getMessage());
@@ -246,7 +247,7 @@ class PedidoTest {
         @Test
         @DisplayName("Equals e HashCode devem operar exclusivamente via UUID")
         void equalsEHashCodeDevemRespeitarUuid() {
-            Pedido pedido2 = new Pedido(parceiroMock);
+            Pedido pedido2 = new Pedido(parceiroMock, "ERP-123");
 
             // Cada "new Pedido" gera um novo UUID.randomUUID()
             assertNotEquals(pedido, pedido2, "Pedidos diferentes geram identidades diferentes");

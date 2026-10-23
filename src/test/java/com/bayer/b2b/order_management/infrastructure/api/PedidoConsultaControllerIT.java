@@ -3,12 +3,12 @@ package com.bayer.b2b.order_management.infrastructure.api;
 import com.bayer.b2b.order_management.application.usecase.BuscarPedidoPorIdUseCase;
 import com.bayer.b2b.order_management.application.usecase.ConsultarPedidosUseCase;
 import com.bayer.b2b.order_management.application.usecase.PedidoFiltro;
-import com.bayer.b2b.order_management.domain.execption.GlobalExceptionHandler;
-import com.bayer.b2b.order_management.domain.execption.ResourceNotFoundException;
+import com.bayer.b2b.order_management.domain.exception.PedidoNaoEncontradoException;
 import com.bayer.b2b.order_management.domain.model.ItemPedido;
 import com.bayer.b2b.order_management.domain.model.Parceiro;
 import com.bayer.b2b.order_management.domain.model.Pedido;
 import com.bayer.b2b.order_management.domain.model.StatusPedido;
+import com.bayer.b2b.order_management.infrastructure.api.exception.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -70,7 +70,7 @@ class PedidoConsultaControllerIT {
         Parceiro parceiro = new Parceiro("Bayer B2B Client", "88888888888888", new BigDecimal("100000.00"));
         ReflectionTestUtils.setField(parceiro, "id", 99L);
 
-        pedidoMock = new Pedido(parceiro);
+        pedidoMock = new Pedido(parceiro, "ERP-123");
         ReflectionTestUtils.setField(pedidoMock, "id", pedidoIdAlvo);
         ReflectionTestUtils.setField(pedidoMock, "dataCriacao", Instant.parse("2026-10-22T10:00:00Z"));
         ReflectionTestUtils.setField(pedidoMock, "dataUltimaAtualizacao", Instant.parse("2026-10-22T10:30:00Z"));
@@ -121,21 +121,24 @@ class PedidoConsultaControllerIT {
     class ErrosEContingenciasTests {
 
         @Test
-        @DisplayName("Deve interceptar ResourceNotFoundException e formatar saída como HTTP 404 (Not Found)")
+        @DisplayName("Deve interceptar PedidoNaoEncontradoException e formatar saída como HTTP 404 (Not Found)")
         void deveRetornarStatus404QuandoPedidoNaoExistir() throws Exception {
             // Arrange
             String mensagemErro = "Pedido não localizado para o ID: " + pedidoIdAlvo;
             when(buscarPedidoPorIdUseCase.execute(pedidoIdAlvo))
-                    .thenThrow(new ResourceNotFoundException(mensagemErro));
+                    .thenThrow(new PedidoNaoEncontradoException(mensagemErro));
 
             // Act & Assert
             mockMvc.perform(get("/api/v1/pedidos/{id}", pedidoIdAlvo)
                             .accept(MediaType.APPLICATION_JSON))
                     .andExpect(status().isNotFound())
-                    .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                    // 1. Atualizamos a expectativa do Content-Type
+                    .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
                     .andExpect(jsonPath("$.status").value(404))
-                    .andExpect(jsonPath("$.error").value("Recurso Não Localizado"))
-                    .andExpect(jsonPath("$.message").value(mensagemErro))
+                    // 2. A chave antiga 'error' agora é 'title' na RFC 9457
+                    .andExpect(jsonPath("$.title").value("Recurso Não Localizado"))
+                    // 3. A chave antiga 'message' agora é 'detail' na RFC 9457
+                    .andExpect(jsonPath("$.detail").value(mensagemErro))
                     .andExpect(jsonPath("$.timestamp").exists());
 
             verify(buscarPedidoPorIdUseCase, times(1)).execute(pedidoIdAlvo);

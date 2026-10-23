@@ -1,5 +1,6 @@
 package com.bayer.b2b.order_management.domain.model;
 
+import com.bayer.b2b.order_management.domain.exception.TransicaoStatusInvalidaException;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
@@ -19,7 +20,15 @@ import java.util.*;
  * @version 1.0
  */
 @Entity
-@Table(name = "pedidos")
+@Table(
+        name = "pedidos",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_pedido_parceiro_codigo_origem",
+                        columnNames = {"parceiro_id", "codigo_pedido_origem"}
+                )
+        }
+)
 public class Pedido {
 
     /*
@@ -30,6 +39,26 @@ public class Pedido {
     @Id
     @Column(updatable = false, nullable = false, length = 36)
     private UUID id;
+
+    /**
+     * Controle de Concorrência Otimista (Optimistic Lock).
+     * <p>
+     * Protege a raiz de agregação contra a anomalia de "Lost Update" (Atualização Perdida).
+     * O framework (Hibernate) gerencia este número de forma invisível, incrementando-o a cada UPDATE.
+     * Caso duas threads tentem salvar o pedido usando a mesma versão inicial, a segunda tentativa
+     * será ejetada nativamente com uma OptimisticLockException.
+     * </p>
+     */
+    @Version
+    private Long versao;
+
+    /**
+     * Chave Natural de Idempotência.
+     * Armazena o código ou número do pedido gerado no ERP do cliente parceiro.
+     * A combinação (parceiro_id + codigo_pedido_origem) é garantida como única no banco.
+     */
+    @Column(name = "codigo_pedido_origem", nullable = false, length = 100)
+    private String codigoPedidoOrigem;
 
     /*
      * Mapeamento LAZY (Preguiçoso) é obrigatório em nível Sênior para evitar o problema N+1.
@@ -68,13 +97,20 @@ public class Pedido {
 
     /**
      * Construtor principal (Fail-Fast).
-     * Garante que um pedido nunca nasça inválido ou sem um cliente atrelado.
+     * Garante que um pedido nunca nasça inválido, sem cliente ou sem chave de idempotência do ERP.
      *
      * @param parceiro O cliente B2B detentor do pedido.
+     * @param codigoPedidoOrigem O número identificador do pedido no sistema do parceiro.
      */
-    public Pedido(Parceiro parceiro) {
+    public Pedido(Parceiro parceiro, String codigoPedidoOrigem) {
         this.id = UUID.randomUUID(); // Identidade garantida em memória
         this.parceiro = Objects.requireNonNull(parceiro, "O parceiro do pedido não pode ser nulo");
+        this.codigoPedidoOrigem = Objects.requireNonNull(codigoPedidoOrigem, "O código de origem do pedido não pode ser nulo");
+
+        if (codigoPedidoOrigem.isBlank()) {
+            throw new IllegalArgumentException("O código de origem do pedido não pode estar em branco");
+        }
+
         this.status = StatusPedido.PENDENTE;
         this.valorTotal = BigDecimal.ZERO;
     }
@@ -109,13 +145,13 @@ public class Pedido {
      * </p>
      *
      * @param novoStatus O status desejado.
-     * @throws IllegalStateException se a regra de transição for violada.
+     * @throws TransicaoStatusInvalidaException se a regra de transição for violada pela máquina de estados.
      */
     private void transitarStatus(StatusPedido novoStatus) {
         Objects.requireNonNull(novoStatus, "O novo status não pode ser nulo");
 
         if (!this.status.podeTransitarPara(novoStatus)) {
-            throw new IllegalStateException(
+            throw new TransicaoStatusInvalidaException(
                     String.format("Violação da Máquina de Estados: O pedido não pode transitar de %s para %s",
                             this.status.name(), novoStatus.name())
             );
@@ -223,6 +259,10 @@ public class Pedido {
     public Instant getDataUltimaAtualizacao() {
         return dataUltimaAtualizacao;
     }
+
+    public Long getVersao() { return versao; }
+
+    public String getCodigoPedidoOrigem() { return codigoPedidoOrigem; }
 
     // =========================================================================================
     // Equals e HashCode baseados estritamente na chave de negócio única (UUID).

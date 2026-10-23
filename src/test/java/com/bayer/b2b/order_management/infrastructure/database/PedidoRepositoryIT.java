@@ -76,7 +76,7 @@ class PedidoRepositoryIT {
         @DisplayName("Deve salvar o Pedido e ejetar o INSERT dos itens automaticamente (CascadeType.ALL)")
         void deveSalvarPedidoEItensEmCascata() {
             // Arrange - Prepara a agregação na memória
-            Pedido pedido = new Pedido(parceiroBase);
+            Pedido pedido = new Pedido(parceiroBase, "ERP-123");
             ItemPedido item1 = new ItemPedido(pedido, "PROD-A", 2, new BigDecimal("50.00")); // Total: 100
             ItemPedido item2 = new ItemPedido(pedido, "PROD-B", 1, new BigDecimal("100.00")); // Total: 100
             pedido.adicionarItem(item1);
@@ -110,7 +110,7 @@ class PedidoRepositoryIT {
         @DisplayName("Deve executar a query HQL com JOIN FETCH sem erros de sintaxe e hidratar as coleções")
         void deveBuscarPedidoComItensPreCarregados() {
             // Arrange - Insere dados físicos no banco de testes
-            Pedido pedido = new Pedido(parceiroBase);
+            Pedido pedido = new Pedido(parceiroBase, "ERP-123");
             pedido.adicionarItem(new ItemPedido(pedido, "PROD-X", 10, new BigDecimal("5.00")));
             Pedido salvo = entityManager.persistAndFlush(pedido);
 
@@ -149,8 +149,8 @@ class PedidoRepositoryIT {
         @DisplayName("Deve retornar todos os pedidos paginados quando o filtro for nulo (Predicate vazio)")
         void deveRetornarTodosQuandoFiltroNulo() {
             // Arrange - Prepara a massa de dados
-            Pedido pedido1 = new Pedido(parceiroBase);
-            Pedido pedido2 = new Pedido(parceiroBase);
+            Pedido pedido1 = new Pedido(parceiroBase, "ERP-123");
+            Pedido pedido2 = new Pedido(parceiroBase, "ERP-1234");
             entityManager.persist(pedido1);
             entityManager.persistAndFlush(pedido2);
             entityManager.clear();
@@ -170,7 +170,7 @@ class PedidoRepositoryIT {
         @DisplayName("Deve montar a cláusula WHERE corretamente e filtrar por Status")
         void deveFiltrarPorStatus() {
             // Arrange - Usa Reflection para forçar um status imutável simulando um pedido em andamento
-            Pedido pedido = new Pedido(parceiroBase);
+            Pedido pedido = new Pedido(parceiroBase, "ERP-123");
             ReflectionTestUtils.setField(pedido, "status", StatusPedido.APROVADO);
             entityManager.persistAndFlush(pedido);
             entityManager.clear();
@@ -191,7 +191,7 @@ class PedidoRepositoryIT {
         @DisplayName("Deve montar a cláusula WHERE corretamente e filtrar pelo range de Datas (Between)")
         void deveFiltrarPorDataDeCriacao() {
             // Arrange - Salva o registro normalmente (o Hibernate vai gerar a data de hoje)
-            Pedido pedidoAntigo = new Pedido(parceiroBase);
+            Pedido pedidoAntigo = new Pedido(parceiroBase, "ERP-123");
             entityManager.persistAndFlush(pedidoAntigo);
 
             // Força a alteração histórica direto no banco (SQL Nativo), ignorando as travas do JPA

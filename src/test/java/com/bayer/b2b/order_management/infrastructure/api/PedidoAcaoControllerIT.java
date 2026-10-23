@@ -3,8 +3,8 @@ package com.bayer.b2b.order_management.infrastructure.api;
 import com.bayer.b2b.order_management.application.usecase.AprovarPedidoUseCase;
 import com.bayer.b2b.order_management.application.usecase.CancelarPedidoUseCase;
 import com.bayer.b2b.order_management.application.usecase.MovimentarPedidoUseCase;
-import com.bayer.b2b.order_management.domain.execption.GlobalExceptionHandler;
-import com.bayer.b2b.order_management.domain.execption.ResourceNotFoundException;
+import com.bayer.b2b.order_management.domain.exception.PedidoNaoEncontradoException;
+import com.bayer.b2b.order_management.infrastructure.api.exception.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -126,23 +126,23 @@ class PedidoAcaoControllerIT {
     class ErrosEContingenciasTests {
 
         @Test
-        @DisplayName("Deve interceptar ResourceNotFoundException e traduzir para HTTP 404 (Not Found)")
+        @DisplayName("Deve interceptar PedidoNaoEncontradoException e traduzir para HTTP 404 (Not Found)")
         void deveRetornarStatus404QuandoPedidoNaoExistir() throws Exception {
             // Arrange
             String mensagemErro = "Pedido não localizado para o ID: " + pedidoIdAlvo;
 
             // Simulamos que o UseCase não achou o pedido e estourou o erro do domínio
-            doThrow(new ResourceNotFoundException(mensagemErro))
+            doThrow(new PedidoNaoEncontradoException(mensagemErro))
                     .when(aprovarPedidoUseCase).execute(pedidoIdAlvo);
 
             // Act & Assert
             mockMvc.perform(post("/api/v1/pedidos/{id}/aprovacao", pedidoIdAlvo)
                             .contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isNotFound())
-                    .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
                     .andExpect(jsonPath("$.status").value(404))
-                    .andExpect(jsonPath("$.error").value("Recurso Não Localizado"))
-                    .andExpect(jsonPath("$.message").value(mensagemErro));
+                    .andExpect(jsonPath("$.title").value("Recurso Não Localizado"))
+                    .andExpect(jsonPath("$.detail").value(mensagemErro));
 
             verify(aprovarPedidoUseCase, times(1)).execute(pedidoIdAlvo);
         }

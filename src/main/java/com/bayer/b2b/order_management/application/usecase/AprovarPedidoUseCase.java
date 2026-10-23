@@ -1,6 +1,7 @@
 package com.bayer.b2b.order_management.application.usecase;
 
-import com.bayer.b2b.order_management.domain.execption.ResourceNotFoundException;
+import com.bayer.b2b.order_management.domain.exception.ParceiroNaoEncontradoException;
+import com.bayer.b2b.order_management.domain.exception.PedidoNaoEncontradoException;
 import com.bayer.b2b.order_management.domain.model.Parceiro;
 import com.bayer.b2b.order_management.domain.model.Pedido;
 import com.bayer.b2b.order_management.domain.port.OrderEventPublisherPort;
@@ -48,9 +49,9 @@ public class AprovarPedidoUseCase {
      *
      * @param pedidoId O identificador único do pedido a ser aprovado.
      * @return O pedido atualizado com o status APROVADO.
-     * @throws ResourceNotFoundException Se o pedido não existir na base.
-     * @throws IllegalStateException Se o pedido não estiver no estado PENDENTE.
-     * @throws IllegalArgumentException Se o parceiro não possuir limite de crédito suficiente.
+     * @throws PedidoNaoEncontradoException Se o pedido não existir na base.
+     * @throws TransicaoStatusInvalidaException Se o pedido não estiver no estado PENDENTE.
+     * @throws CreditoInsuficienteException Se o parceiro não possuir limite de crédito suficiente.
      */
     @Transactional
     public Pedido execute(UUID pedidoId) {
@@ -58,12 +59,12 @@ public class AprovarPedidoUseCase {
 
         // 1. Recupera a Raiz de Agregação da base de dados
         Pedido pedido = pedidoRepository.findById(pedidoId)
-                .orElseThrow(() -> new ResourceNotFoundException("Pedido não localizado para o ID: " + pedidoId));
+                .orElseThrow(() -> new PedidoNaoEncontradoException("Pedido não localizado para o ID: " + pedidoId));
 
         // 2. Trava física de escrita (Pessimistic Lock) na conta do Parceiro.
         // Extraímos o ID do parceiro do pedido (Proxy LAZY) e buscamos a entidade travada.
         Parceiro parceiro = parceiroRepository.findByIdWithPessimisticLock(pedido.getParceiro().getId())
-                .orElseThrow(() -> new IllegalStateException("Parceiro atrelado ao pedido não localizado na base de dados"));
+                .orElseThrow(() -> new ParceiroNaoEncontradoException("Parceiro atrelado ao pedido não localizado na base de dados"));
 
         // 3. Regra Financeira: Tenta debitar o valor do pedido do limite de crédito do parceiro.
         // Se não houver saldo, o método do domínio lançará exceção e o Spring fará o ROLLBACK da transação.

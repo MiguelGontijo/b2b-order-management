@@ -1,6 +1,6 @@
 package com.bayer.b2b.order_management.application.usecase;
 
-import com.bayer.b2b.order_management.domain.execption.ResourceNotFoundException;
+import com.bayer.b2b.order_management.domain.exception.PedidoNaoEncontradoException;
 import com.bayer.b2b.order_management.domain.model.Parceiro;
 import com.bayer.b2b.order_management.domain.model.Pedido;
 import com.bayer.b2b.order_management.infrastructure.database.PedidoRepository;
@@ -51,7 +51,7 @@ class BuscarPedidoPorIdUseCaseTest {
         // Preparação do cenário de dados simulados em memória
         pedidoIdAlvo = UUID.randomUUID();
         Parceiro parceiro = new Parceiro("Bayer Agro Testes", "11111111111111", new BigDecimal("50000.00"));
-        pedidoMock = new Pedido(parceiro);
+        pedidoMock = new Pedido(parceiro, "ERP-123");
     }
 
     @Nested
@@ -96,13 +96,13 @@ class BuscarPedidoPorIdUseCaseTest {
         }
 
         @Test
-        @DisplayName("Deve estourar ResourceNotFoundException quando o banco de dados retornar vazio (Garantia de 404)")
+        @DisplayName("Deve estourar PedidoNaoEncontradoException quando o banco de dados retornar vazio (Garantia de 404)")
         void deveLancarExcecaoQuandoPedidoNaoExistir() {
             // Arrange (Mock simulando que o banco fez a busca e não achou nada)
             when(pedidoRepository.findByIdWithItens(pedidoIdAlvo)).thenReturn(Optional.empty());
 
             // Act & Assert
-            ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () ->
+            PedidoNaoEncontradoException exception = assertThrows(PedidoNaoEncontradoException.class, () ->
                     useCase.execute(pedidoIdAlvo)
             );
 

@@ -1,6 +1,7 @@
 package com.bayer.b2b.order_management.application.usecase;
 
-import com.bayer.b2b.order_management.domain.execption.ResourceNotFoundException;
+import com.bayer.b2b.order_management.domain.exception.PedidoNaoEncontradoException;
+import com.bayer.b2b.order_management.domain.exception.TransicaoStatusInvalidaException;
 import com.bayer.b2b.order_management.domain.model.ItemPedido;
 import com.bayer.b2b.order_management.domain.model.Parceiro;
 import com.bayer.b2b.order_management.domain.model.Pedido;
@@ -68,7 +69,7 @@ class CancelarPedidoUseCaseTest {
         parceiro = new Parceiro("Bayer B2B", "99999999999999", new BigDecimal("5000.00"));
         ReflectionTestUtils.setField(parceiro, "id", 1L);
 
-        pedido = new Pedido(parceiro);
+        pedido = new Pedido(parceiro, "ERP-123");
         // Pedido possui um valor financeiro de 1000.00
         pedido.adicionarItem(new ItemPedido(pedido, "PROD-A", 1, new BigDecimal("1000.00")));
     }
@@ -145,7 +146,7 @@ class CancelarPedidoUseCaseTest {
             when(pedidoRepository.findById(pedidoId)).thenReturn(Optional.of(pedido));
 
             // Act & Assert
-            IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+            TransicaoStatusInvalidaException exception = assertThrows(TransicaoStatusInvalidaException.class, () ->
                     useCase.execute(pedidoId)
             );
             assertEquals("Violação da Máquina de Estados: O pedido não pode transitar de ENTREGUE para CANCELADO", exception.getMessage());
@@ -172,11 +173,11 @@ class CancelarPedidoUseCaseTest {
         }
 
         @Test
-        @DisplayName("Deve lançar ResourceNotFoundException quando o pedido não existir na base")
+        @DisplayName("Deve lançar PedidoNaoEncontradoException quando o pedido não existir na base")
         void deveFalharQuandoPedidoNaoExistir() {
             when(pedidoRepository.findById(pedidoId)).thenReturn(Optional.empty());
 
-            ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () ->
+            PedidoNaoEncontradoException exception = assertThrows(PedidoNaoEncontradoException.class, () ->
                     useCase.execute(pedidoId)
             );
             assertEquals("Pedido não localizado para o ID: " + pedidoId, exception.getMessage());

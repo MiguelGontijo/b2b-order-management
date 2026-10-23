@@ -1,6 +1,9 @@
 package com.bayer.b2b.order_management.application.usecase;
 
-import com.bayer.b2b.order_management.domain.execption.ResourceNotFoundException;
+import com.bayer.b2b.order_management.domain.exception.CreditoInsuficienteException;
+import com.bayer.b2b.order_management.domain.exception.ParceiroNaoEncontradoException;
+import com.bayer.b2b.order_management.domain.exception.PedidoNaoEncontradoException;
+import com.bayer.b2b.order_management.domain.exception.TransicaoStatusInvalidaException;
 import com.bayer.b2b.order_management.domain.model.ItemPedido;
 import com.bayer.b2b.order_management.domain.model.Parceiro;
 import com.bayer.b2b.order_management.domain.model.Pedido;
@@ -65,7 +68,7 @@ class AprovarPedidoUseCaseTest {
         parceiro = new Parceiro("Bayer B2B", "11111111111111", new BigDecimal("5000.00"));
         ReflectionTestUtils.setField(parceiro, "id", 1L);
 
-        pedido = new Pedido(parceiro);
+        pedido = new Pedido(parceiro, "ERP-123");
         // Adicionamos um item de 2000.00 para que o pedido tenha valor financeiro a ser cobrado
         pedido.adicionarItem(new ItemPedido(pedido, "PROD-A", 2, new BigDecimal("1000.00")));
     }
@@ -114,10 +117,10 @@ class AprovarPedidoUseCaseTest {
             when(parceiroRepository.findByIdWithPessimisticLock(1L)).thenReturn(Optional.of(parceiro));
 
             // Act & Assert
-            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+            CreditoInsuficienteException exception = assertThrows(CreditoInsuficienteException.class, () ->
                     useCase.execute(pedidoId)
             );
-            assertEquals("Crédito insuficiente para o parceiro: 11111111111111", exception.getMessage());
+            assertEquals("Crédito insuficiente para o parceiro CNPJ 11111111111111. Limite disponível: 500.00, Tentativa de Débito: 2000.00", exception.getMessage());
 
             // GARANTIA DE OURO: Bloqueio de Side-Effects
             verify(pedidoRepository, never()).save(any());
@@ -134,7 +137,7 @@ class AprovarPedidoUseCaseTest {
             when(parceiroRepository.findByIdWithPessimisticLock(1L)).thenReturn(Optional.of(parceiro));
 
             // Act & Assert
-            IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+            TransicaoStatusInvalidaException exception = assertThrows(TransicaoStatusInvalidaException.class, () ->
                     useCase.execute(pedidoId)
             );
             assertEquals("Violação da Máquina de Estados: O pedido não pode transitar de APROVADO para APROVADO", exception.getMessage());
@@ -160,11 +163,11 @@ class AprovarPedidoUseCaseTest {
         }
 
         @Test
-        @DisplayName("Deve lançar ResourceNotFoundException quando o pedido não existir no banco")
+        @DisplayName("Deve lançar PedidoNaoEncontradoException quando o pedido não existir no banco")
         void deveFalharQuandoPedidoNaoExistir() {
             when(pedidoRepository.findById(pedidoId)).thenReturn(Optional.empty());
 
-            ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () ->
+            PedidoNaoEncontradoException exception = assertThrows(PedidoNaoEncontradoException.class, () ->
                     useCase.execute(pedidoId)
             );
             assertEquals("Pedido não localizado para o ID: " + pedidoId, exception.getMessage());
@@ -173,12 +176,12 @@ class AprovarPedidoUseCaseTest {
         }
 
         @Test
-        @DisplayName("Deve lançar IllegalStateException quando o parceiro atrelado não existir (Inconsistência Relacional)")
+        @DisplayName("Deve lançar ParceiroNaoEncontradoException quando o parceiro atrelado não existir (Inconsistência Relacional)")
         void deveFalharQuandoParceiroNaoExistirParaLock() {
             when(pedidoRepository.findById(pedidoId)).thenReturn(Optional.of(pedido));
             when(parceiroRepository.findByIdWithPessimisticLock(1L)).thenReturn(Optional.empty());
 
-            IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+            ParceiroNaoEncontradoException exception = assertThrows(ParceiroNaoEncontradoException.class, () ->
                     useCase.execute(pedidoId)
             );
             assertEquals("Parceiro atrelado ao pedido não localizado na base de dados", exception.getMessage());

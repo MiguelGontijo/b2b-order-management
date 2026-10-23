@@ -1,6 +1,6 @@
 package com.bayer.b2b.order_management.application.usecase;
 
-import com.bayer.b2b.order_management.domain.execption.ResourceNotFoundException;
+import com.bayer.b2b.order_management.domain.exception.PedidoNaoEncontradoException;
 import com.bayer.b2b.order_management.domain.model.Pedido;
 import com.bayer.b2b.order_management.domain.port.OrderEventPublisherPort;
 import com.bayer.b2b.order_management.infrastructure.database.PedidoRepository;
@@ -73,10 +73,17 @@ public class MovimentarPedidoUseCase {
     // Métodos utilitários privados para reuso estrutural
     // =========================================================================================
 
+    /**
+     * Extrai a raiz de agregação do banco de dados, falhando rapidamente caso não exista.
+     *
+     * @param pedidoId O identificador único do pedido.
+     * @return A entidade Pedido hidratada.
+     * @throws PedidoNaoEncontradoException Se o pedido não constar na base.
+     */
     private Pedido extrairPedido(UUID pedidoId) {
         Objects.requireNonNull(pedidoId, "O ID do pedido não pode ser nulo");
         return pedidoRepository.findById(pedidoId)
-                .orElseThrow(() -> new ResourceNotFoundException("Pedido não localizado para o ID: " + pedidoId));
+                .orElseThrow(() -> new PedidoNaoEncontradoException("Pedido não localizado para o ID: " + pedidoId));
     }
 
     private Pedido concluirMovimentacao(Pedido pedido) {

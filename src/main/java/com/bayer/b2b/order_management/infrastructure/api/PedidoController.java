@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -50,6 +51,7 @@ public class PedidoController {
      * <b>Decisão Arquitetural:</b> Em sistemas de alto tráfego, a tradução do DTO web
      * para o Command de negócio protege o núcleo do sistema de vulnerabilidades de
      * injeção (Mass Assignment) e desacopla a versão da API da modelagem de dados.
+     * A anotação @Valid aplica o Fail-Fast, bloqueando requisições com dados malformados.
      * </p>
      */
     @PostMapping
@@ -59,9 +61,11 @@ public class PedidoController {
     )
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Pedido recepcionado e criado com sucesso (Status PENDENTE)."),
+            @ApiResponse(responseCode = "400", description = "Falha de validação no payload (ex: valores negativos, IDs ausentes)."),
+            @ApiResponse(responseCode = "409", description = "Conflito de Idempotência: Um pedido com este código de origem já foi processado para este parceiro."),
             @ApiResponse(responseCode = "422", description = "Regra de negócio violada na validação estrutural do pedido.")
     })
-    public ResponseEntity<PedidoResumoResponse> processarPedido(@RequestBody ProcessarPedidoRequest payload) {
+    public ResponseEntity<PedidoResumoResponse> processarPedido(@Valid @RequestBody ProcessarPedidoRequest payload) {
 
         // 1. Tradução Limpa (Web DTO -> Core Command) utilizando Streams Funcionais
         // Alteração Arquitetural: Uso de List em vez de Set para preservar cardinalidade dos itens idênticos
@@ -75,6 +79,7 @@ public class PedidoController {
 
         ProcessarPedidoCommand command = new ProcessarPedidoCommand(
                 payload.parceiroId(),
+                payload.codigoPedidoOrigem(),
                 itensCommand
         );
 

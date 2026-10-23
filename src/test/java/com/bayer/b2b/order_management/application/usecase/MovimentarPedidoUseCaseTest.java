@@ -1,6 +1,7 @@
 package com.bayer.b2b.order_management.application.usecase;
 
-import com.bayer.b2b.order_management.domain.execption.ResourceNotFoundException;
+import com.bayer.b2b.order_management.domain.exception.PedidoNaoEncontradoException;
+import com.bayer.b2b.order_management.domain.exception.TransicaoStatusInvalidaException;
 import com.bayer.b2b.order_management.domain.model.Parceiro;
 import com.bayer.b2b.order_management.domain.model.Pedido;
 import com.bayer.b2b.order_management.domain.model.StatusPedido;
@@ -58,7 +59,7 @@ class MovimentarPedidoUseCaseTest {
         pedidoId = UUID.randomUUID();
         // Setup base: Um pedido nasce invariavelmente como PENDENTE
         Parceiro parceiro = new Parceiro("Bayer Transporte", "99999999999999", new BigDecimal("10000.00"));
-        pedido = new Pedido(parceiro);
+        pedido = new Pedido(parceiro, "ERP-123");
     }
 
     @Nested
@@ -138,7 +139,7 @@ class MovimentarPedidoUseCaseTest {
             when(pedidoRepository.findById(pedidoId)).thenReturn(Optional.of(pedido));
 
             // Act & Assert
-            IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+            TransicaoStatusInvalidaException exception = assertThrows(TransicaoStatusInvalidaException.class, () ->
                     useCase.entregar(pedidoId)
             );
             assertEquals("Violação da Máquina de Estados: O pedido não pode transitar de PENDENTE para ENTREGUE", exception.getMessage());
@@ -165,11 +166,11 @@ class MovimentarPedidoUseCaseTest {
         }
 
         @Test
-        @DisplayName("Deve lançar ResourceNotFoundException se o UUID não existir no banco de dados")
+        @DisplayName("Deve lançar PedidoNaoEncontradoException se o UUID não existir no banco de dados")
         void deveFalharQuandoPedidoNaoExistir() {
             when(pedidoRepository.findById(pedidoId)).thenReturn(Optional.empty());
 
-            ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () ->
+            PedidoNaoEncontradoException exception = assertThrows(PedidoNaoEncontradoException.class, () ->
                     useCase.processar(pedidoId)
             );
             assertEquals("Pedido não localizado para o ID: " + pedidoId, exception.getMessage());

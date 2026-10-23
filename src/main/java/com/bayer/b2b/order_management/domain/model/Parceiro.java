@@ -1,5 +1,6 @@
 package com.bayer.b2b.order_management.domain.model;
 
+import com.bayer.b2b.order_management.domain.exception.CreditoInsuficienteException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -73,7 +74,7 @@ public class Parceiro {
      * </p>
      *
      * @param valor O valor do pedido a ser debitado.
-     * @throws IllegalArgumentException Se o parceiro não possuir saldo suficiente.
+     * @throws CreditoInsuficienteException Se o parceiro não possuir saldo suficiente.
      */
     public void debitarCredito(BigDecimal valor) {
         Objects.requireNonNull(valor, "O valor de débito não pode ser nulo");
@@ -84,7 +85,10 @@ public class Parceiro {
 
         // compareTo retorna -1 se o limite atual for menor que o valor cobrado
         if (this.limiteCredito.compareTo(valor) < 0) {
-            throw new IllegalArgumentException("Crédito insuficiente para o parceiro: " + this.cnpj);
+            throw new CreditoInsuficienteException(
+                    String.format("Crédito insuficiente para o parceiro CNPJ %s. Limite disponível: %s, Tentativa de Débito: %s",
+                            this.cnpj, this.limiteCredito, valor)
+            );
         }
 
         this.limiteCredito = this.limiteCredito.subtract(valor);

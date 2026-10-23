@@ -1,5 +1,6 @@
 package com.bayer.b2b.order_management.domain.model;
 
+import com.bayer.b2b.order_management.domain.exception.CreditoInsuficienteException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -187,16 +188,16 @@ class ParceiroTest {
         }
 
         @Test
-        @DisplayName("Deve lançar IllegalArgumentException e proteger o estado interno quando saldo for insuficiente")
+        @DisplayName("Deve lançar CreditoInsuficienteException e proteger o estado interno quando saldo for insuficiente")
         void deveFalharQuandoDebitoForMaiorQueLimite() {
             // Arrange
             BigDecimal valorDebito = new BigDecimal("5000.01"); // Estoura o limite de 5000.00
 
             // Act & Assert
-            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+            CreditoInsuficienteException exception = assertThrows(CreditoInsuficienteException.class, () ->
                     parceiro.debitarCredito(valorDebito)
             );
-            assertEquals("Crédito insuficiente para o parceiro: 12345678901234", exception.getMessage());
+            assertEquals("Crédito insuficiente para o parceiro CNPJ 12345678901234. Limite disponível: 5000.00, Tentativa de Débito: 5000.01", exception.getMessage());
 
             // Assert Estado Intacto
             assertEquals(0, new BigDecimal("5000.00").compareTo(parceiro.getLimiteCredito()),

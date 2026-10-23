@@ -67,7 +67,7 @@ class PedidoStatusChangedEventTest {
         void deveTraduzirPedidoParaEventoComSucesso() {
             // Arrange
             Parceiro parceiro = new Parceiro("Bayer Crop Science", "98765432109876", new BigDecimal("10000.00"));
-            Pedido pedido = new Pedido(parceiro);
+            Pedido pedido = new Pedido(parceiro, "ERP-123");
             pedido.aprovar();
 
             // Incrementamos um valor para simular itens no pedido

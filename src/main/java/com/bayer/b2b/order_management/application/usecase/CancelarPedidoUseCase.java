@@ -1,6 +1,6 @@
 package com.bayer.b2b.order_management.application.usecase;
 
-import com.bayer.b2b.order_management.domain.execption.ResourceNotFoundException;
+import com.bayer.b2b.order_management.domain.exception.PedidoNaoEncontradoException;
 import com.bayer.b2b.order_management.domain.model.Parceiro;
 import com.bayer.b2b.order_management.domain.model.Pedido;
 import com.bayer.b2b.order_management.domain.model.StatusPedido;
@@ -48,7 +48,7 @@ public class CancelarPedidoUseCase {
      *
      * @param pedidoId O identificador único do pedido a ser cancelado.
      * @return O pedido atualizado com o status CANCELADO.
-     * @throws ResourceNotFoundException Se o pedido não existir na base.
+     * @throws PedidoNaoEncontradoException Se o pedido não existir na base.
      */
     @Transactional
     public Pedido execute(UUID pedidoId) {
@@ -56,7 +56,7 @@ public class CancelarPedidoUseCase {
 
         // 1. Recupera o Pedido
         Pedido pedido = pedidoRepository.findById(pedidoId)
-                .orElseThrow(() -> new ResourceNotFoundException("Pedido não localizado para o ID: " + pedidoId));
+                .orElseThrow(() -> new PedidoNaoEncontradoException("Pedido não localizado para o ID: " + pedidoId));
 
         // 2. Análise de Estado Prévio: Verifica se o limite do parceiro foi consumido no passado
         StatusPedido statusAtual = pedido.getStatus();

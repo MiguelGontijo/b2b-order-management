@@ -63,7 +63,7 @@ class ConsultarPedidosUseCaseTest {
 
         // Mock da Entidade de saída
         Parceiro parceiro = new Parceiro("Bayer B2B Mock", "99999999999999", new BigDecimal("10000.00"));
-        Pedido pedidoMock = new Pedido(parceiro);
+        Pedido pedidoMock = new Pedido(parceiro, "ERP-123");
 
         // Estrutura de Paginação nativa do Spring
         paginaSimulada = new PageImpl<>(List.of(pedidoMock), pageablePadrao, 1);

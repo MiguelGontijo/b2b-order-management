@@ -1,6 +1,6 @@
 package com.bayer.b2b.order_management.application.usecase;
 
-import com.bayer.b2b.order_management.domain.execption.ResourceNotFoundException;
+import com.bayer.b2b.order_management.domain.exception.PedidoNaoEncontradoException;
 import com.bayer.b2b.order_management.domain.model.Pedido;
 import com.bayer.b2b.order_management.infrastructure.database.PedidoRepository;
 import org.springframework.stereotype.Service;
@@ -39,13 +39,13 @@ public class BuscarPedidoPorIdUseCase {
      *
      * @param id O UUID do pedido solicitado pelo cliente B2B.
      * @return A Entidade de Domínio rica (Aggregate Root) totalmente hidratada.
-     * @throws ResourceNotFoundException Se o ID fornecido não existir na base.
+     * @throws PedidoNaoEncontradoException Se o ID fornecido não existir na base.
      */
     @Transactional(readOnly = true)
     public Pedido execute(UUID id) {
         Objects.requireNonNull(id, "O identificador do pedido não pode ser nulo para a consulta");
 
         return pedidoRepository.findByIdWithItens(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Pedido não localizado para o ID: " + id));
+                .orElseThrow(() -> new PedidoNaoEncontradoException("Pedido não localizado para o ID: " + id));
     }
 }

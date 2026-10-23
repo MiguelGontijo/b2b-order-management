@@ -68,7 +68,7 @@ class ProcessarPedidoUseCaseTest {
         @DisplayName("Deve instanciar ProcessarPedidoCommand com sucesso quando dados forem válidos")
         void deveCriarProcessarPedidoCommand() {
             List<ItemCommand> itens = List.of(new ItemCommand("PROD-1", 10, new BigDecimal("10.00")));
-            ProcessarPedidoCommand command = new ProcessarPedidoCommand(1L, itens);
+            ProcessarPedidoCommand command = new ProcessarPedidoCommand(1L, "ERP-123", itens);
 
             assertEquals(1L, command.parceiroId());
             assertEquals(1, command.itens().size());
@@ -79,7 +79,7 @@ class ProcessarPedidoUseCaseTest {
         void deveFalharQuandoParceiroIdNulo() {
             List<ItemCommand> itens = List.of(new ItemCommand("PROD-1", 10, new BigDecimal("10.00")));
             NullPointerException exception = assertThrows(NullPointerException.class, () ->
-                    new ProcessarPedidoCommand(null, itens)
+                    new ProcessarPedidoCommand(null, "ERP-123", itens)
             );
             assertEquals("O ID do parceiro é obrigatório", exception.getMessage());
         }
@@ -88,12 +88,12 @@ class ProcessarPedidoUseCaseTest {
         @DisplayName("Deve lançar exceção quando a lista de itens do Command for nula ou vazia")
         void deveFalharQuandoItensNulosOuVazios() {
             IllegalArgumentException exNulo = assertThrows(IllegalArgumentException.class, () ->
-                    new ProcessarPedidoCommand(1L, null)
+                    new ProcessarPedidoCommand(1L, "ERP-123",null)
             );
             assertEquals("O pedido deve conter pelo menos um item", exNulo.getMessage());
 
             IllegalArgumentException exVazio = assertThrows(IllegalArgumentException.class, () ->
-                    new ProcessarPedidoCommand(1L, Collections.emptyList())
+                    new ProcessarPedidoCommand(1L, "ERP-123", Collections.emptyList())
             );
             assertEquals("O pedido deve conter pelo menos um item", exVazio.getMessage());
         }
@@ -119,7 +119,7 @@ class ProcessarPedidoUseCaseTest {
                     new ItemCommand("PROD-X", 2, new BigDecimal("50.00")), // Total: 100.00
                     new ItemCommand("PROD-Y", 1, new BigDecimal("150.00")) // Total: 150.00
             ); // Total do Pedido = 250.00
-            ProcessarPedidoCommand command = new ProcessarPedidoCommand(99L, itensCommand);
+            ProcessarPedidoCommand command = new ProcessarPedidoCommand(99L, "ERP-123", itensCommand);
 
             // Arrange - Simulamos a existência do Parceiro no banco com limite inicial (1000.00)
             Parceiro parceiroRealDoDominio = new Parceiro("Bayer Agro", "11111111111111", new BigDecimal("1000.00"));
@@ -165,7 +165,8 @@ class ProcessarPedidoUseCaseTest {
         @DisplayName("Deve barrar e lançar IllegalArgumentException quando o parceiro não for encontrado no banco")
         void deveFalharQuandoParceiroNaoExistir() {
             // Arrange
-            ProcessarPedidoCommand command = new ProcessarPedidoCommand(99L, List.of(new ItemCommand("PROD-1", 1, BigDecimal.TEN)));
+            ProcessarPedidoCommand command = new ProcessarPedidoCommand(99L, "ERP-123",
+                    List.of(new ItemCommand("PROD-1", 1, BigDecimal.TEN)));
 
             // Simulamos o banco não encontrando ninguém (leitura simples sem lock)
             when(parceiroRepository.findById(99L)).thenReturn(Optional.empty());
